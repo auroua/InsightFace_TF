@@ -5,7 +5,7 @@
 * ~~backbone network architecture [vgg16, vgg19, resnet]~~
 * backbone network architecture [resnet-se, resnext, se-lresnetx]
 * train network code
-* evluation network code
+* evaluate code
 
 
 #### Requirements
