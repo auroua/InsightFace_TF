@@ -27,3 +27,6 @@
 3. [tensorlayer_vgg16](https://github.com/tensorlayer/tensorlayer/blob/master/example/tutorial_vgg16.py)
 4. [tensorlayer_vgg19](https://github.com/tensorlayer/tensorlayer/blob/master/example/tutorial_vgg19.py)
 5. [tf_slim](https://github.com/tensorflow/models/tree/master/research/slim)
+6. [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385)
+7. [Very Deep Convolutional Networks For Large-Scale Image Recognition](https://arxiv.org/abs/1409.1556)
+8. [Squeeze-and-Excitation Networks](https://arxiv.org/pdf/1709.01507.pdf)
