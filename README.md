@@ -2,8 +2,10 @@
 
 #### Tasks
 * ~~mxnet dataset to tfrecords~~
-* ~~backbone network architecture [vgg16, vgg19, resnet]~~
-* backbone network architecture [resnet-se, resnext, se-lresnetx]
+* ~~backbone network architectures [vgg16, vgg19, resnet]~~
+* ~~backbone network architectures [resnet-se, resnext]~~
+* LResNet50E-IR
+* LResNet100E-IR
 * train network code
 * evaluate code
 
