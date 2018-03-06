@@ -4,8 +4,9 @@
 * ~~mxnet dataset to tfrecords~~
 * ~~backbone network architectures [vgg16, vgg19, resnet]~~
 * ~~backbone network architectures [resnet-se, resnext]~~
-* LResNet50E-IR
-* LResNet100E-IR
+* ~~LResNet50E-IR~~
+* ~~LResNet100E-IR~~
+* Additive Angular Margin Loss
 * train network code
 * evaluate code
 

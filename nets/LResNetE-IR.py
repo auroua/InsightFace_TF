@@ -3,7 +3,6 @@ import tensorlayer as tl
 from tensorflow.contrib.layers.python.layers import utils
 import collections
 from tensorlayer.layers import Layer, list_remove_repeat
-from nets_utils import get_variables_in_checkpoint_file
 
 
 class ElementwiseLayer(Layer):
@@ -54,6 +53,120 @@ class ElementwiseLayer(Layer):
 
         self.all_layers = list_remove_repeat(self.all_layers)
         self.all_params = list_remove_repeat(self.all_params)
+
+
+class BatchNormLayer(Layer):
+    """
+    The :class:`BatchNormLayer` class is a normalization layer, see ``tf.nn.batch_normalization`` and ``tf.nn.moments``.
+
+    Batch normalization on fully-connected or convolutional maps.
+
+    Parameters
+    -----------
+    layer : a :class:`Layer` instance
+        The `Layer` class feeding into this layer.
+    decay : float, default is 0.9.
+        A decay factor for ExponentialMovingAverage, use larger value for large dataset.
+    epsilon : float
+        A small float number to avoid dividing by 0.
+    act : activation function.
+    is_train : boolean
+        Whether train or inference.
+    beta_init : beta initializer
+        The initializer for initializing beta
+    gamma_init : gamma initializer
+        The initializer for initializing gamma
+    dtype : tf.float32 (default) or tf.float16
+    name : a string or None
+        An optional name to attach to this layer.
+
+    References
+    ----------
+    - `Source <https://github.com/ry/tensorflow-resnet/blob/master/resnet.py>`_
+    - `stackoverflow <http://stackoverflow.com/questions/38312668/how-does-one-do-inference-with-batch-normalization-with-tensor-flow>`_
+    """
+
+    def __init__(
+            self,
+            layer=None,
+            decay=0.9,
+            epsilon=0.00001,
+            act=tf.identity,
+            is_train=False,
+            fix_gamma=False,
+            beta_init=tf.zeros_initializer,
+            gamma_init=tf.random_normal_initializer(mean=1.0, stddev=0.002),  # tf.ones_initializer,
+            # dtype = tf.float32,
+            name='batchnorm_layer',
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+        print("  [TL] BatchNormLayer %s: decay:%f epsilon:%f act:%s is_train:%s" % (self.name, decay, epsilon, act.__name__, is_train))
+        x_shape = self.inputs.get_shape()
+        params_shape = x_shape[-1:]
+
+        from tensorflow.python.training import moving_averages
+        from tensorflow.python.ops import control_flow_ops
+
+        with tf.variable_scope(name) as vs:
+            axis = list(range(len(x_shape) - 1))
+
+            ## 1. beta, gamma
+            if tf.__version__ > '0.12.1' and beta_init == tf.zeros_initializer:
+                beta_init = beta_init()
+            beta = tf.get_variable('beta', shape=params_shape, initializer=beta_init, dtype=tf.float32, trainable=is_train)  #, restore=restore)
+
+            gamma = tf.get_variable(
+                'gamma',
+                shape=params_shape,
+                initializer=gamma_init,
+                dtype=tf.float32,
+                trainable=fix_gamma,
+            )  #restore=restore)
+
+            ## 2.
+            if tf.__version__ > '0.12.1':
+                moving_mean_init = tf.zeros_initializer()
+            else:
+                moving_mean_init = tf.zeros_initializer
+            moving_mean = tf.get_variable('moving_mean', params_shape, initializer=moving_mean_init, dtype=tf.float32, trainable=False)  #   restore=restore)
+            moving_variance = tf.get_variable(
+                'moving_variance',
+                params_shape,
+                initializer=tf.constant_initializer(1.),
+                dtype=tf.float32,
+                trainable=False,
+            )  #   restore=restore)
+
+            ## 3.
+            # These ops will only be preformed when training.
+            mean, variance = tf.nn.moments(self.inputs, axis)
+            try:  # TF12
+                update_moving_mean = moving_averages.assign_moving_average(moving_mean, mean, decay, zero_debias=False)  # if zero_debias=True, has bias
+                update_moving_variance = moving_averages.assign_moving_average(
+                    moving_variance, variance, decay, zero_debias=False)  # if zero_debias=True, has bias
+                # print("TF12 moving")
+            except Exception as e:  # TF11
+                update_moving_mean = moving_averages.assign_moving_average(moving_mean, mean, decay)
+                update_moving_variance = moving_averages.assign_moving_average(moving_variance, variance, decay)
+                # print("TF11 moving")
+
+            def mean_var_with_update():
+                with tf.control_dependencies([update_moving_mean, update_moving_variance]):
+                    return tf.identity(mean), tf.identity(variance)
+
+            if is_train:
+                mean, var = mean_var_with_update()
+                self.outputs = act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
+            else:
+                self.outputs = act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
+
+            variables = [beta, gamma, moving_mean, moving_variance]
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+        self.all_layers.extend([self.outputs])
+        self.all_params.extend(variables)
 
 
 def subsample(inputs, factor, scope=None):
@@ -115,13 +228,10 @@ def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, scope=None):
         residual = tl.layers.Conv2d(residual, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
                                     name='conv1')
         residual = tl.layers.BatchNormLayer(residual, act=tf.identity, is_train=True, name='conv1_bn2')
-
         # bottleneck prelu
         residual = tl.layers.PReluLayer(residual)
-
         # bottleneck layer 2
-        residual = conv2d_same(residual, depth_bottleneck, kernel_size=3, strides=2, rate=rate, scope='conv2')
-
+        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, scope='conv2')
         output = ElementwiseLayer(layer=[shortcut, residual],
                                   combine_fn=tf.add,
                                   name='combine_layer',
@@ -143,17 +253,15 @@ def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, scope=None
         residual = tl.layers.Conv2d(residual, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
                                     name='conv1')
         residual = tl.layers.BatchNormLayer(residual, act=tf.identity, is_train=True, name='conv1_bn2')
-
         # bottleneck prelu
         residual = tl.layers.PReluLayer(residual)
-
         # bottleneck layer 2
-        residual = conv2d_same(residual, depth_bottleneck, kernel_size=3, strides=2, rate=rate, scope='conv2')
-
+        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, scope='conv2')
         # squeeze
         squeeze = tl.layers.InputLayer(tf.reduce_mean(residual.outputs, axis=[1, 2]), name='squeeze_layer')
         # excitation
         excitation1 = tl.layers.DenseLayer(squeeze, n_units=int(depth/16.0), act=tf.nn.relu, name='excitation_1')
+        # excitation1 = tl.layers.PReluLayer(excitation1, name='excitation_prelu')
         excitation2 = tl.layers.DenseLayer(excitation1, n_units=depth, act=tf.nn.sigmoid, name='excitation_2')
         # scale
         scale = tl.layers.ReshapeLayer(excitation2, shape=[tf.shape(excitation2.outputs)[0], 1, 1, depth], name='excitation_reshape')
@@ -170,15 +278,16 @@ def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, scope=None
         return output
 
 
-def resnet(inputs, bottle_neck, blocks, scope=None, type=None):
+def resnet(inputs, bottle_neck, blocks, scope=None):
     with tf.variable_scope(scope):
-        mean_rgb_var = tf.Variable(dtype=tf.float32, name='mean_rgb', trainable=False, initial_value=[128.0, 128.0, 128.0])
-        rgb_mean_dims = tf.reshape(mean_rgb_var, shape=[1, 1, 1, 3])
-        inputs = tf.subtract(inputs, rgb_mean_dims)
+        inputs = tf.subtract(inputs, 127.5)
+        inputs = tf.multiply(inputs, 0.0078125)
         net_inputs = tl.layers.InputLayer(inputs, name='input_layer')
         if bottle_neck:
-            net = conv2d_same(net_inputs, 64, 3, strides=1, rate=1, scope='conv1')
-            net = tl.layers.MaxPool2d(net, (2, 2), padding='SAME', name='pool1')
+            net = tl.layers.Conv2d(net_inputs, n_filter=64, filter_size=(3, 3), strides=(1, 1),
+                                   act=None, b_init=None, name='conv1')
+            net = tl.layers.BatchNormLayer(net, act=tf.identity, name='bn0')
+            net = tl.layers.PReluLayer(net, name='prelu0')
         else:
             raise ValueError('The standard resnet must support the bottleneck layer')
         for block in blocks:
@@ -187,13 +296,12 @@ def resnet(inputs, bottle_neck, blocks, scope=None, type=None):
                     with tf.variable_scope('unit_%d' % (i+1)):
                         net = block.unit_fn(net, depth=var['depth'], depth_bottleneck=var['depth_bottleneck'],
                                             stride=var['stride'], rate=var['rate'], scope=None)
-        net.outputs = tf.reduce_mean(net.outputs, [1, 2], keep_dims=True)
         net = tl.layers.BatchNormLayer(net, act=tf.identity, is_train=True, name='E_BN1')
-        net = tl.layers.DropoutLayer(net, name='E_Dropout')
+        net = tl.layers.DropoutLayer(net, keep=0.4, name='E_Dropout')
         net_shape = net.outputs.get_shape()
         net = tl.layers.ReshapeLayer(net, shape=[-1, net_shape[1]*net_shape[2]*net_shape[3]], name='E_Reshapelayer')
         net = tl.layers.DenseLayer(net, n_units=512, name='E_DenseLayer')
-        net = tl.layers.BatchNormLayer(net, act=tf.identity, is_train=True, name='E_BN2')
+        net = BatchNormLayer(net, act=tf.identity, is_train=True, fix_gamma=False, name='E_BN2')
         return net
 
 
@@ -210,7 +318,7 @@ class Block(collections.namedtuple('Block', ['scope', 'unit_fn', 'args'])):
     """
 
 
-def resnetse_v1_block(scope, base_depth, num_units, stride, rate=1):
+def resnetse_v1_block(scope, base_depth, num_units, stride, rate=1, unit_fn=None):
   """Helper function for creating a resnet_v1 bottleneck block.
 
   Args:
@@ -223,58 +331,62 @@ def resnetse_v1_block(scope, base_depth, num_units, stride, rate=1):
   Returns:
     A resnet_v1 bottleneck block.
   """
-  return Block(scope, bottleneck_SE, [{
-      'depth': base_depth * 4,
-      'depth_bottleneck': base_depth,
-      'stride': 1,
-      'rate': rate
-  }] * (num_units - 1) + [{
+  return Block(scope, unit_fn, [{
       'depth': base_depth * 4,
       'depth_bottleneck': base_depth,
       'stride': stride,
       'rate': rate
-  }])
+  }] + [{
+      'depth': base_depth * 4,
+      'depth_bottleneck': base_depth,
+      'stride': 1,
+      'rate': rate
+  }] * (num_units - 1))
 
 
-def get_resnet(inputs, num_classes, num_layers,  sess=None, pretrained=True):
-        if num_layers == 50:
-            blocks = [
-                resnetse_v1_block('block1', base_depth=64, num_units=3, stride=2, rate=1),
-                resnetse_v1_block('block2', base_depth=128, num_units=4, stride=2, rate=1),
-                resnetse_v1_block('block3', base_depth=256, num_units=6, stride=2, rate=1),
-                resnetse_v1_block('block4', base_depth=512, num_units=3, stride=1, rate=1)
-            ]
-        elif num_layers == 101:
-            blocks = [
-                resnetse_v1_block('block1', base_depth=64, num_units=3, stride=2, rate=1),
-                resnetse_v1_block('block2', base_depth=128, num_units=4, stride=2, rate=1),
-                resnetse_v1_block('block3', base_depth=256, num_units=23, stride=2, rate=1),
-                resnetse_v1_block('block4', base_depth=512, num_units=3, stride=1, rate=1)
-            ]
-        elif num_layers == 152:
-            blocks = [
-                resnetse_v1_block('block1', base_depth=64, num_units=3, stride=2, rate=1),
-                resnetse_v1_block('block2', base_depth=128, num_units=8, stride=2, rate=1),
-                resnetse_v1_block('block3', base_depth=256, num_units=36, stride=2, rate=1),
-                resnetse_v1_block('block4', base_depth=512, num_units=3, stride=1, rate=1)
-            ]
-        else:
-            raise ValueError('Resnet layer %d is not supported now.' % num_layers)
-        net = resnet(inputs=inputs,
-                     bottle_neck=True,
-                     blocks=blocks,
-                     num_classes=num_classes,
-                     scope='resnet_v1_%d' % num_layers,
-                     type=type)
-        return net
+def get_resnet(inputs, num_layers, type=None, sess=None):
+    if type == 'ir':
+        unit_fn = bottleneck_IR
+    elif type == 'se_ir':
+        unit_fn = bottleneck_IR_SE
+    else:
+        raise ValueError('the input fn is unknown')
+
+    if num_layers == 50:
+        blocks = [
+            resnetse_v1_block('block1', base_depth=64, num_units=3, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block2', base_depth=128, num_units=4, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block3', base_depth=256, num_units=14, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block4', base_depth=512, num_units=3, stride=2, rate=1, unit_fn=unit_fn)
+        ]
+    elif num_layers == 101:
+        blocks = [
+            resnetse_v1_block('block1', base_depth=64, num_units=3, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block2', base_depth=128, num_units=4, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block3', base_depth=256, num_units=23, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block4', base_depth=512, num_units=3, stride=2, rate=1, unit_fn=unit_fn)
+        ]
+    elif num_layers == 152:
+        blocks = [
+            resnetse_v1_block('block1', base_depth=64, num_units=3, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block2', base_depth=128, num_units=8, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block3', base_depth=256, num_units=36, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block4', base_depth=512, num_units=3, stride=2, rate=1, unit_fn=unit_fn)
+        ]
+    else:
+        raise ValueError('Resnet layer %d is not supported now.' % num_layers)
+    net = resnet(inputs=inputs,
+                 bottle_neck=True,
+                 blocks=blocks,
+                 scope='resnet_v1_%d' % num_layers)
+    return net
 
 
 if __name__ == '__main__':
-        x = tf.placeholder(dtype=tf.float32, shape=[1, 224, 224, 3], name='input_place')
+        x = tf.placeholder(dtype=tf.float32, shape=[1, 112, 112, 3], name='input_place')
         sess = tf.Session()
-
-        # # test resnetse
-        # nets = get_resnet(x, 1000, 50, type='resnetse', sess=sess, pretrained=False)
-        # tl.layers.initialize_global_variables(sess)
-        # with sess:
-        #     nets.print_params()
+        # test resnetse
+        nets = get_resnet(x, 50, type='ir', sess=sess)
+        tl.layers.initialize_global_variables(sess)
+        with sess:
+            nets.print_params()
