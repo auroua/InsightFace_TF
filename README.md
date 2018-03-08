@@ -6,7 +6,8 @@
 * ~~backbone network architectures [resnet-se, resnext]~~
 * ~~LResNet50E-IR~~
 * ~~LResNet100E-IR~~
-* Additive Angular Margin Loss
+* ~~Additive Angular Margin Loss~~
+* ~~CosineFace Loss~~
 * train network code
 * evaluate code
 
