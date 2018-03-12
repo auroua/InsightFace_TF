@@ -6,6 +6,7 @@ import numpy as np
 import cv2
 import tensorflow as tf
 import os
+import sys
 
 
 def parse_args():
@@ -29,11 +30,21 @@ def mx2tfrecords(imgidx, imgrec, args):
     for i in imgidx:
         img_info = imgrec.read_idx(i)
         header, img = mx.recordio.unpack(img_info)
-        encoded_jpg_io = io.BytesIO(img)
-        image = PIL.Image.open(encoded_jpg_io)
-        np_img = np.array(image)
-        img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
-        img_raw = img.tobytes()
+        # encoded_jpg_io = io.BytesIO(img)
+        # image = PIL.Image.open(encoded_jpg_io)
+        # np_img = np.array(image)
+        # img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
+        # img_raw = img.tobytes()
+        # images = tf.image.decode_jpeg(img)
+        images = tf.decode_raw(img, out_type=tf.uint8)
+        images = tf.reshape(images, shape=(112, 112, 3))
+        sess = tf.Session()
+        np_images = sess.run(images)
+        print(images.shape)
+        print(type(np_images))
+        print(sys.getsizeof(np_images))
+        cv2.imshow('test', np_images)
+        cv2.waitKey(0)
         label = int(header.label)
         example = tf.train.Example(features=tf.train.Features(feature={
             'image_raw': tf.train.Feature(bytes_list=tf.train.BytesList(value=[img_raw])),
@@ -45,14 +56,18 @@ def mx2tfrecords(imgidx, imgrec, args):
     writer.close()
 
 
-def _parse_function(example_proto):
+def parse_function(example_proto):
     features = {'image_raw': tf.FixedLenFeature([], tf.string),
                 'label': tf.FixedLenFeature([], tf.int64)}
     features = tf.parse_single_example(example_proto, features)
     # You can do more image distortion here for training data
     img = tf.decode_raw(features['image_raw'], tf.uint8)
     img = tf.reshape(img, [112, 112, 3])
-    label = tf.cast(features['label'], tf.int32)
+    img = tf.cast(img, dtype=tf.float32)
+    img = tf.subtract(img, 127.5)
+    img = tf.multiply(img,  0.0078125)
+    img = tf.image.random_flip_left_right(img)
+    label = tf.cast(features['label'], tf.int64)
     return img, label
 
 
@@ -75,14 +90,14 @@ if __name__ == '__main__':
     print('id2range', len(id2range))
 
     # generate tfrecords
-    # mx2tfrecords(imgidx, imgrec, args)
+    mx2tfrecords(imgidx, imgrec, args)
 
     config = tf.ConfigProto(allow_soft_placement=True)
     sess = tf.Session(config=config)
     # training datasets api config
     tfrecords_f = os.path.join(args.tfrecords_file_path, 'tran.tfrecords')
     dataset = tf.data.TFRecordDataset(tfrecords_f)
-    dataset = dataset.map(_parse_function)
+    dataset = dataset.map(parse_function)
     dataset = dataset.shuffle(buffer_size=300000)
     dataset = dataset.batch(32)
     iterator = dataset.make_initializable_iterator()

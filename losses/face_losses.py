@@ -2,7 +2,7 @@ import tensorflow as tf
 import math
 
 
-def arcface_loss(embedding, labels, out_num, s=64., m=0.5):
+def arcface_loss(embedding, labels, out_num, w_init=None, s=64., m=0.5):
     '''
     :param embedding: the input embedding vectors
     :param labels:  the input labels, the shape should be eg: (batch_size, 1)
@@ -20,7 +20,7 @@ def arcface_loss(embedding, labels, out_num, s=64., m=0.5):
         embedding_norm = tf.norm(embedding, axis=1, keep_dims=True)
         embedding = tf.div(embedding, embedding_norm, name='norm_embedding')
         weights = tf.get_variable(name='embedding_weights', shape=(embedding.get_shape().as_list()[-1], out_num),
-                                  initializer=tf.truncated_normal_initializer(stddev=0.1), dtype=tf.float32)
+                                  initializer=w_init, dtype=tf.float32)
         weights_norm = tf.norm(weights, axis=0, keep_dims=True)
         weights = tf.div(weights, weights_norm, name='norm_weights')
         # cos(theta+m)
@@ -48,7 +48,7 @@ def arcface_loss(embedding, labels, out_num, s=64., m=0.5):
     return output
 
 
-def cosineface_losses(embedding, labels, out_num, s=30., m=0.4):
+def cosineface_losses(embedding, labels, out_num, w_init=None, s=30., m=0.4):
     '''
     :param embedding: the input embedding vectors
     :param labels:  the input labels, the shape should be eg: (batch_size, 1)
@@ -62,7 +62,7 @@ def cosineface_losses(embedding, labels, out_num, s=30., m=0.4):
         embedding_norm = tf.norm(embedding, axis=1, keep_dims=True)
         embedding = tf.div(embedding, embedding_norm, name='norm_embedding')
         weights = tf.get_variable(name='embedding_weights', shape=(embedding.get_shape().as_list()[-1], out_num),
-                                  initializer=tf.truncated_normal_initializer(stddev=0.1), dtype=tf.float32)
+                                  initializer=w_init, dtype=tf.float32)
         weights_norm = tf.norm(weights, axis=0, keep_dims=True)
         weights = tf.div(weights, weights_norm, name='norm_weights')
         # cos_theta - m

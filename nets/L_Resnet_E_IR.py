@@ -176,7 +176,7 @@ def subsample(inputs, factor, scope=None):
         return tl.layers.MaxPool2d(inputs, [1, 1], strides=(factor, factor), name=scope)
 
 
-def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, scope=None):
+def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, w_init=None, scope=None):
     '''
     Reference slim resnet
     :param inputs:
@@ -190,11 +190,11 @@ def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, scope=None):
     if strides == 1:
         if rate == 1:
             nets = tl.layers.Conv2d(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
-                                   strides=(strides, strides), act=None, padding='SAME', name=scope)
+                                   strides=(strides, strides), W_init=w_init, act=None, padding='SAME', name=scope)
             nets = tl.layers.BatchNormLayer(nets, act=tf.identity, is_train=True, name=scope+'_bn/BatchNorm')
         else:
             nets = tl.layers.AtrousConv2dLayer(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size),
-                                               rate=rate, act=None, padding='SAME', name=scope)
+                                               rate=rate, act=None, W_init=w_init, padding='SAME', name=scope)
             nets = tl.layers.BatchNormLayer(nets, act=tf.identity, is_train=True, name=scope+'_bn/BatchNorm')
         return nets
     else:
@@ -205,33 +205,33 @@ def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, scope=None):
         inputs = tl.layers.PadLayer(inputs, [[0, 0], [pad_beg, pad_end], [pad_beg, pad_end], [0, 0]], name='padding_%s' % scope)
         if rate == 1:
             nets = tl.layers.Conv2d(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
-                                    strides=(strides, strides), act=None, padding='VALID', name=scope)
+                                    strides=(strides, strides), W_init=w_init, act=None, padding='VALID', name=scope)
             nets = tl.layers.BatchNormLayer(nets, act=tf.identity, is_train=True, name=scope+'_bn/BatchNorm')
         else:
             nets = tl.layers.AtrousConv2dLayer(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
-                                              rate=rate, act=None, padding='SAME', name=scope)
+                                              rate=rate, act=None, W_init=w_init, padding='SAME', name=scope)
             nets = tl.layers.BatchNormLayer(nets, act=tf.identity, is_train=True, name=scope+'_bn/BatchNorm')
         return nets
 
 
-def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, scope=None):
+def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, scope=None):
     with tf.variable_scope(scope, 'bottleneck_v1') as sc:
         depth_in = utils.last_dimension(inputs.outputs.get_shape(), min_rank=4)
         if depth == depth_in:
             shortcut = subsample(inputs, stride, 'shortcut')
         else:
             shortcut = tl.layers.Conv2d(inputs, depth, filter_size=(1, 1), strides=(stride, stride), act=None,
-                                        b_init=None, name='shortcut_conv')
+                                        W_init=w_init, b_init=None, name='shortcut_conv')
             shortcut = tl.layers.BatchNormLayer(shortcut, act=tf.identity, is_train=True, name='shortcut_bn/BatchNorm')
         # bottleneck layer 1
         residual = tl.layers.BatchNormLayer(inputs, act=tf.identity, is_train=True, name='conv1_bn1')
         residual = tl.layers.Conv2d(residual, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
-                                    name='conv1')
+                                    W_init=w_init, name='conv1')
         residual = tl.layers.BatchNormLayer(residual, act=tf.identity, is_train=True, name='conv1_bn2')
         # bottleneck prelu
         residual = tl.layers.PReluLayer(residual)
         # bottleneck layer 2
-        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, scope='conv2')
+        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, w_init=w_init, scope='conv2')
         output = ElementwiseLayer(layer=[shortcut, residual],
                                   combine_fn=tf.add,
                                   name='combine_layer',
@@ -239,30 +239,32 @@ def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, scope=None):
         return output
 
 
-def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, scope=None):
+def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, scope=None):
     with tf.variable_scope(scope, 'bottleneck_v1') as sc:
         depth_in = utils.last_dimension(inputs.outputs.get_shape(), min_rank=4)
         if depth == depth_in:
             shortcut = subsample(inputs, stride, 'shortcut')
         else:
             shortcut = tl.layers.Conv2d(inputs, depth, filter_size=(1, 1), strides=(stride, stride), act=None,
-                                        b_init=None, name='shortcut_conv')
+                                        W_init=w_init, b_init=None, name='shortcut_conv')
             shortcut = tl.layers.BatchNormLayer(shortcut, act=tf.identity, is_train=True, name='shortcut_bn/BatchNorm')
         # bottleneck layer 1
         residual = tl.layers.BatchNormLayer(inputs, act=tf.identity, is_train=True, name='conv1_bn1')
         residual = tl.layers.Conv2d(residual, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
-                                    name='conv1')
+                                    W_init=w_init, name='conv1')
         residual = tl.layers.BatchNormLayer(residual, act=tf.identity, is_train=True, name='conv1_bn2')
         # bottleneck prelu
         residual = tl.layers.PReluLayer(residual)
         # bottleneck layer 2
-        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, scope='conv2')
+        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, w_init=w_init, scope='conv2')
         # squeeze
         squeeze = tl.layers.InputLayer(tf.reduce_mean(residual.outputs, axis=[1, 2]), name='squeeze_layer')
         # excitation
-        excitation1 = tl.layers.DenseLayer(squeeze, n_units=int(depth/16.0), act=tf.nn.relu, name='excitation_1')
+        excitation1 = tl.layers.DenseLayer(squeeze, n_units=int(depth/16.0), act=tf.nn.relu,
+                                           W_init=w_init, name='excitation_1')
         # excitation1 = tl.layers.PReluLayer(excitation1, name='excitation_prelu')
-        excitation2 = tl.layers.DenseLayer(excitation1, n_units=depth, act=tf.nn.sigmoid, name='excitation_2')
+        excitation2 = tl.layers.DenseLayer(excitation1, n_units=depth, act=tf.nn.sigmoid,
+                                           W_init=w_init, name='excitation_2')
         # scale
         scale = tl.layers.ReshapeLayer(excitation2, shape=[tf.shape(excitation2.outputs)[0], 1, 1, depth], name='excitation_reshape')
 
@@ -278,14 +280,14 @@ def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, scope=None
         return output
 
 
-def resnet(inputs, bottle_neck, blocks, scope=None):
+def resnet(inputs, bottle_neck, blocks, w_init=None, scope=None):
     with tf.variable_scope(scope):
-        inputs = tf.subtract(inputs, 127.5)
-        inputs = tf.multiply(inputs, 0.0078125)
+        # inputs = tf.subtract(inputs, 127.5)
+        # inputs = tf.multiply(inputs, 0.0078125)
         net_inputs = tl.layers.InputLayer(inputs, name='input_layer')
         if bottle_neck:
             net = tl.layers.Conv2d(net_inputs, n_filter=64, filter_size=(3, 3), strides=(1, 1),
-                                   act=None, b_init=None, name='conv1')
+                                   act=None, W_init=w_init, b_init=None, name='conv1')
             net = tl.layers.BatchNormLayer(net, act=tf.identity, name='bn0')
             net = tl.layers.PReluLayer(net, name='prelu0')
         else:
@@ -295,12 +297,12 @@ def resnet(inputs, bottle_neck, blocks, scope=None):
                 for i, var in enumerate(block.args):
                     with tf.variable_scope('unit_%d' % (i+1)):
                         net = block.unit_fn(net, depth=var['depth'], depth_bottleneck=var['depth_bottleneck'],
-                                            stride=var['stride'], rate=var['rate'], scope=None)
+                                            w_init=w_init, stride=var['stride'], rate=var['rate'], scope=None)
         net = tl.layers.BatchNormLayer(net, act=tf.identity, is_train=True, name='E_BN1')
         net = tl.layers.DropoutLayer(net, keep=0.4, name='E_Dropout')
         net_shape = net.outputs.get_shape()
         net = tl.layers.ReshapeLayer(net, shape=[-1, net_shape[1]*net_shape[2]*net_shape[3]], name='E_Reshapelayer')
-        net = tl.layers.DenseLayer(net, n_units=512, name='E_DenseLayer')
+        net = tl.layers.DenseLayer(net, n_units=512, W_init=w_init, name='E_DenseLayer')
         net = BatchNormLayer(net, act=tf.identity, is_train=True, fix_gamma=False, name='E_BN2')
         return net
 
@@ -344,7 +346,7 @@ def resnetse_v1_block(scope, base_depth, num_units, stride, rate=1, unit_fn=None
   }] * (num_units - 1))
 
 
-def get_resnet(inputs, num_layers, type=None, sess=None):
+def get_resnet(inputs, num_layers, type=None, w_init=None, sess=None):
     if type == 'ir':
         unit_fn = bottleneck_IR
     elif type == 'se_ir':
@@ -362,8 +364,8 @@ def get_resnet(inputs, num_layers, type=None, sess=None):
     elif num_layers == 101:
         blocks = [
             resnetse_v1_block('block1', base_depth=64, num_units=3, stride=2, rate=1, unit_fn=unit_fn),
-            resnetse_v1_block('block2', base_depth=128, num_units=4, stride=2, rate=1, unit_fn=unit_fn),
-            resnetse_v1_block('block3', base_depth=256, num_units=23, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block2', base_depth=128, num_units=13, stride=2, rate=1, unit_fn=unit_fn),
+            resnetse_v1_block('block3', base_depth=256, num_units=30, stride=2, rate=1, unit_fn=unit_fn),
             resnetse_v1_block('block4', base_depth=512, num_units=3, stride=2, rate=1, unit_fn=unit_fn)
         ]
     elif num_layers == 152:
@@ -378,15 +380,22 @@ def get_resnet(inputs, num_layers, type=None, sess=None):
     net = resnet(inputs=inputs,
                  bottle_neck=True,
                  blocks=blocks,
+                 w_init=w_init,
                  scope='resnet_v1_%d' % num_layers)
     return net
 
 
 if __name__ == '__main__':
-        x = tf.placeholder(dtype=tf.float32, shape=[1, 112, 112, 3], name='input_place')
+        x = tf.placeholder(dtype=tf.float32, shape=[None, 112, 112, 3], name='input_place')
         sess = tf.Session()
+        # w_init = tf.truncated_normal_initializer(mean=10, stddev=5e-2)
+        w_init = tf.contrib.layers.xavier_initializer(uniform=False)
         # test resnetse
-        nets = get_resnet(x, 50, type='ir', sess=sess)
+        nets = get_resnet(x, 50, type='ir', w_init=w_init, sess=sess)
         tl.layers.initialize_global_variables(sess)
+
+        for p in tl.layers.get_variables_with_name('W_conv2d', True, True):
+            print(p.op.name)
+        print('##############'*30)
         with sess:
             nets.print_params()
