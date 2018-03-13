@@ -40,6 +40,7 @@ def arcface_loss(embedding, labels, out_num, w_init=None, s=64., m=0.5):
         cos_mt_temp = tf.where(cond, cos_mt, keep_val)
 
         mask = tf.one_hot(labels, depth=out_num, name='one_hot_mask')
+        # mask = tf.squeeze(mask, 1)
         inv_mask = tf.subtract(1., mask, name='inverse_mask')
 
         s_cos_t = tf.multiply(s, cos_t, name='scalar_cos_t')

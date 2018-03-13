@@ -8,12 +8,25 @@
 * ~~LResNet100E-IR~~
 * ~~Additive Angular Margin Loss~~
 * ~~CosineFace Loss~~
-* train network code
+* ~~train network code~~
 * evaluate code
 
+#### Training Logs
+```
+epoch 0, total_step 20, total loss is 107.34 , inference loss is 80.60, weight deacy loss is 26.74, training accuracy is 0.000000, time 38.373 samples/sec
+epoch 0, total_step 40, total loss is 109.65 , inference loss is 77.31, weight deacy loss is 32.34, training accuracy is 0.000000, time 38.281 samples/sec
+epoch 0, total_step 60, total loss is 114.86 , inference loss is 82.29, weight deacy loss is 32.57, training accuracy is 0.000000, time 37.687 samples/sec
+epoch 0, total_step 80, total loss is 104.92 , inference loss is 72.77, weight deacy loss is 32.15, training accuracy is 0.000000, time 38.402 samples/sec
+epoch 0, total_step 100, total loss is 101.66 , inference loss is 69.99, weight deacy loss is 31.67, training accuracy is 0.000000, time 38.235 samples/sec
+epoch 0, total_step 120, total loss is 101.70 , inference loss is 70.54, weight deacy loss is 31.16, training accuracy is 0.000000, time 37.822 samples/sec
+epoch 0, total_step 140, total loss is 102.23 , inference loss is 71.61, weight deacy loss is 30.63, training accuracy is 0.000000, time 38.308 samples/sec
+epoch 0, total_step 160, total loss is 103.26 , inference loss is 73.17, weight deacy loss is 30.08, training accuracy is 0.000000, time 38.054 samples/sec
+epoch 0, total_step 180, total loss is 98.61 , inference loss is 69.07, weight deacy loss is 29.54, training accuracy is 0.000000, time 38.198 samples/sec
+epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight deacy loss is 29.04, training accuracy is 0.000000, time 38.217 samples/sec
+```
 
 #### Requirements
-1. TensorFlow 1.4
+1. TensorFlow 1.4 1.6
 2. TensorLayer 1.7
 
 

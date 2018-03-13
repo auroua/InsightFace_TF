@@ -6,7 +6,6 @@ import numpy as np
 import cv2
 import tensorflow as tf
 import os
-import sys
 
 
 def parse_args():
@@ -24,30 +23,37 @@ def parse_args():
     return args
 
 
+def mx2tfrecords_old(imgidx, imgrec, args):
+    output_path = os.path.join(args.tfrecords_file_path, 'tran.tfrecords')
+    writer = tf.python_io.TFRecordWriter(output_path)
+    for i in imgidx:
+        img_info = imgrec.read_idx(i)
+        header, img = mx.recordio.unpack(img_info)
+        encoded_jpg_io = io.BytesIO(img)
+        image = PIL.Image.open(encoded_jpg_io)
+        np_img = np.array(image)
+        img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
+        img_raw = img.tobytes()
+        label = int(header.label)
+        example = tf.train.Example(features=tf.train.Features(feature={
+            'image_raw': tf.train.Feature(bytes_list=tf.train.BytesList(value=[img_raw])),
+            "label": tf.train.Feature(int64_list=tf.train.Int64List(value=[label]))
+        }))
+        writer.write(example.SerializeToString())  # Serialize To String
+        if i % 10000 == 0:
+            print('%d num image processed' % i)
+    writer.close()
+
+
 def mx2tfrecords(imgidx, imgrec, args):
     output_path = os.path.join(args.tfrecords_file_path, 'tran.tfrecords')
     writer = tf.python_io.TFRecordWriter(output_path)
     for i in imgidx:
         img_info = imgrec.read_idx(i)
         header, img = mx.recordio.unpack(img_info)
-        # encoded_jpg_io = io.BytesIO(img)
-        # image = PIL.Image.open(encoded_jpg_io)
-        # np_img = np.array(image)
-        # img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
-        # img_raw = img.tobytes()
-        # images = tf.image.decode_jpeg(img)
-        images = tf.decode_raw(img, out_type=tf.uint8)
-        images = tf.reshape(images, shape=(112, 112, 3))
-        sess = tf.Session()
-        np_images = sess.run(images)
-        print(images.shape)
-        print(type(np_images))
-        print(sys.getsizeof(np_images))
-        cv2.imshow('test', np_images)
-        cv2.waitKey(0)
         label = int(header.label)
         example = tf.train.Example(features=tf.train.Features(feature={
-            'image_raw': tf.train.Feature(bytes_list=tf.train.BytesList(value=[img_raw])),
+            'image_raw': tf.train.Feature(bytes_list=tf.train.BytesList(value=[img])),
             "label": tf.train.Feature(int64_list=tf.train.Int64List(value=[label]))
         }))
         writer.write(example.SerializeToString())  # Serialize To String
@@ -61,8 +67,10 @@ def parse_function(example_proto):
                 'label': tf.FixedLenFeature([], tf.int64)}
     features = tf.parse_single_example(example_proto, features)
     # You can do more image distortion here for training data
-    img = tf.decode_raw(features['image_raw'], tf.uint8)
-    img = tf.reshape(img, [112, 112, 3])
+    img = tf.image.decode_jpeg(features['image_raw'])
+    img = tf.reshape(img, shape=(112, 112, 3))
+    r, g, b = tf.split(img, num_or_size_splits=3, axis=-1)
+    img = tf.concat([b, g, r], axis=-1)
     img = tf.cast(img, dtype=tf.float32)
     img = tf.subtract(img, 127.5)
     img = tf.multiply(img,  0.0078125)
@@ -72,25 +80,25 @@ def parse_function(example_proto):
 
 
 if __name__ == '__main__':
-    # define parameters
-    id2range = {}
-    data_shape = (3, 112, 112)
+    # # define parameters
+    # id2range = {}
+    # data_shape = (3, 112, 112)
     args = parse_args()
-    imgrec = mx.recordio.MXIndexedRecordIO(args.idx_path, args.bin_path, 'r')
-    s = imgrec.read_idx(0)
-    header, _ = mx.recordio.unpack(s)
-    print(header.label)
-    imgidx = list(range(1, int(header.label[0])))
-    seq_identity = range(int(header.label[0]), int(header.label[1]))
-    for identity in seq_identity:
-        s = imgrec.read_idx(identity)
-        header, _ = mx.recordio.unpack(s)
-        a, b = int(header.label[0]), int(header.label[1])
-        id2range[identity] = (a, b)
-    print('id2range', len(id2range))
+    # imgrec = mx.recordio.MXIndexedRecordIO(args.idx_path, args.bin_path, 'r')
+    # s = imgrec.read_idx(0)
+    # header, _ = mx.recordio.unpack(s)
+    # print(header.label)
+    # imgidx = list(range(1, int(header.label[0])))
+    # seq_identity = range(int(header.label[0]), int(header.label[1]))
+    # for identity in seq_identity:
+    #     s = imgrec.read_idx(identity)
+    #     header, _ = mx.recordio.unpack(s)
+    #     a, b = int(header.label[0]), int(header.label[1])
+    #     id2range[identity] = (a, b)
+    # print('id2range', len(id2range))
 
-    # generate tfrecords
-    mx2tfrecords(imgidx, imgrec, args)
+    # # generate tfrecords
+    # mx2tfrecords(imgidx, imgrec, args)
 
     config = tf.ConfigProto(allow_soft_placement=True)
     sess = tf.Session(config=config)
@@ -98,7 +106,7 @@ if __name__ == '__main__':
     tfrecords_f = os.path.join(args.tfrecords_file_path, 'tran.tfrecords')
     dataset = tf.data.TFRecordDataset(tfrecords_f)
     dataset = dataset.map(parse_function)
-    dataset = dataset.shuffle(buffer_size=300000)
+    dataset = dataset.shuffle(buffer_size=30000)
     dataset = dataset.batch(32)
     iterator = dataset.make_initializable_iterator()
     next_element = iterator.get_next()

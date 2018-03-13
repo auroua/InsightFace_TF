@@ -24,7 +24,7 @@ def parse_args():
     return args
 
 
-def mx2tfrecords(imgidx, imgrec, args):
+def mx2tfrecords_mem_test(imgidx, imgrec, args):
     output_path = os.path.join(args.tfrecords_file_path, 'tran.tfrecords')
     writer = tf.python_io.TFRecordWriter(output_path)
     for i in imgidx:
@@ -37,6 +37,10 @@ def mx2tfrecords(imgidx, imgrec, args):
         img_mx = mx.image.imdecode(img)
         print(type(img_mx))
         print(sys.getsizeof(img_mx))
+        print(img_mx.size)
+        print(img_mx.dtype)
+        print(img_mx.context)
+        print(img_mx.stype)
         print(img_mx)
         print('#####################')
         img_mx_np = img_mx.asnumpy()
@@ -47,6 +51,7 @@ def mx2tfrecords(imgidx, imgrec, args):
         print(type(back_mx_ndarray))
         print(sys.getsizeof(back_mx_ndarray))
         encoded_jpg_io = io.BytesIO(img)
+        print(sys.getsizeof(encoded_jpg_io))
         image = PIL.Image.open(encoded_jpg_io)
         np_img = np.array(image)
         img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
@@ -55,6 +60,39 @@ def mx2tfrecords(imgidx, imgrec, args):
         img_raw = img.tobytes()
         print(sys.getsizeof(img))
         print('#####################')
+    writer.close()
+
+
+def mx2tfrecords(imgidx, imgrec, args):
+    output_path = os.path.join(args.tfrecords_file_path, 'tran.tfrecords')
+    writer = tf.python_io.TFRecordWriter(output_path)
+    for i in imgidx:
+        img_info = imgrec.read_idx(i)
+        header, img = mx.recordio.unpack(img_info)
+        # encoded_jpg_io = io.BytesIO(img)
+        # image = PIL.Image.open(encoded_jpg_io)
+        # np_img = np.array(image)
+        # img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
+        # img_raw = img.tobytes()
+        # images = tf.image.decode_jpeg(img)
+        # images = tf.reshape(images, shape=(112, 112, 3))
+        # r, g, b = tf.split(images, num_or_size_splits=3, axis=-1)
+        # images = tf.concat([b, g, r], axis=-1)
+        # sess = tf.Session()
+        # np_images = sess.run(images)
+        # print(images.shape)
+        # print(type(np_images))
+        # print(sys.getsizeof(np_images))
+        # cv2.imshow('test', np_images)
+        # cv2.waitKey(0)
+        label = int(header.label)
+        example = tf.train.Example(features=tf.train.Features(feature={
+            'image_raw': tf.train.Feature(bytes_list=tf.train.BytesList(value=[img])),
+            "label": tf.train.Feature(int64_list=tf.train.Int64List(value=[label]))
+        }))
+        writer.write(example.SerializeToString())  # Serialize To String
+        if i % 10000 == 0:
+            print('%d num image processed' % i)
     writer.close()
 
 
@@ -77,7 +115,7 @@ if __name__ == '__main__':
     print('id2range', len(id2range))
 
     # generate tfrecords
-    mx2tfrecords(imgidx, imgrec, args)
+    mx2tfrecords_mem_test(imgidx, imgrec, args)
 
 
 

@@ -235,7 +235,7 @@ def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, 
         output = ElementwiseLayer(layer=[shortcut, residual],
                                   combine_fn=tf.add,
                                   name='combine_layer',
-                                  act=tf.nn.relu)
+                                  act=None)
         return output
 
 
