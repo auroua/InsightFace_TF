@@ -28,6 +28,32 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 #### Requirements
 1. TensorFlow 1.4 1.6
 2. TensorLayer 1.7
+3. cuda8&cudnn6 or cuda9&cudnn7
+
+
+#### Max Batch Size Test
+###### Environment
+
+| GPU    | cuda| cudnn | TensorFlow |TensorLayer|Maxnet |Gluon|
+| ----- |:-----:|:-----:|:------:|:---:|:------:|:---:|
+| Titan xp | 9.0 |7.0|1.6|1.7 |1.1.0|1.1.0 |
+
+###### Results
+
+| DL Tools        | Max BatchSize(without bn and prelu)| Max BatchSize(with bn only) | Max BatchSize(with prelu only) |Max BatchSize(with bn and prelu)|
+| ------------- |:-------------:|:--------------:|:------------:|:------------:|
+| TensorLayer      | (8000, 9000) |(5000, 6000)|(3000, 4000)|(2000, 3000) |
+| Mxnet      | (40000, 50000) |(20000, 30000)|(20000, 30000)|(10000, 20000) |
+| Gluon      | (7000, 8000) |(3000, 4000)|no official method| None |
+
+> (8000, 9000) : 8000 without OOM, 9000 OOM Error
+
+###### Test Code
+
+|TensorLayer| Maxnet | Gluon |
+| ----- |:-----:|:-----:|
+| [tensorlayer_batchsize_test.py](https://github.com/auroua/InsightFace_TF/blob/master/test/benchmark/tensorlayer_batchsize_test.py) | [mxnet_batchsize_test.py](https://github.com/auroua/InsightFace_TF/blob/master/test/benchmark/mxnet_batchsize_test.py) |[gluon_batchsize_test.py](https://github.com/auroua/InsightFace_TF/blob/master/test/benchmark/gluon_batchsize_test.py)|
+
 
 
 #### pretrained model download link
