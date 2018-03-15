@@ -13,7 +13,7 @@ def arcface_loss(embedding, labels, out_num, w_init=None, s=64., m=0.5):
     '''
     cos_m = math.cos(m)
     sin_m = math.sin(m)
-    mm = sin_m * m * s
+    mm = sin_m * m  # issue 1
     threshold = math.cos(math.pi - m)
     with tf.variable_scope('arcface_loss'):
         # inputs and weights norm
