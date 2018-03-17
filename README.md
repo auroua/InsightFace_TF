@@ -9,6 +9,7 @@
 * ~~Additive Angular Margin Loss~~
 * ~~CosineFace Loss~~
 * ~~train network code~~
+* ~~add validate during training~~
 * evaluate code
 
 #### Training Logs
@@ -29,6 +30,7 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 1. TensorFlow 1.4 1.6
 2. TensorLayer 1.7
 3. cuda8&cudnn6 or cuda9&cudnn7
+4. Python3
 
 
 #### Max Batch Size Test

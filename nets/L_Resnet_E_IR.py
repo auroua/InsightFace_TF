@@ -93,10 +93,11 @@ class BatchNormLayer(Layer):
             epsilon=0.00001,
             act=tf.identity,
             is_train=False,
-            fix_gamma=False,
+            fix_gamma=True,
             beta_init=tf.zeros_initializer,
             gamma_init=tf.random_normal_initializer(mean=1.0, stddev=0.002),  # tf.ones_initializer,
             # dtype = tf.float32,
+            trainable=None,
             name='batchnorm_layer',
     ):
         Layer.__init__(self, name=name)
@@ -155,11 +156,22 @@ class BatchNormLayer(Layer):
                 with tf.control_dependencies([update_moving_mean, update_moving_variance]):
                     return tf.identity(mean), tf.identity(variance)
 
-            if is_train:
+            # if is_train:
+            #     mean, var = mean_var_with_update()
+            #     self.outputs = act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
+            # else:
+            #     self.outputs = act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
+
+            def train_outputs():
                 mean, var = mean_var_with_update()
-                self.outputs = act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
-            else:
-                self.outputs = act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
+                return act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
+
+            def test_outputs():
+                return act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
+
+            self.outputs = tf.cond(trainable,
+                                   lambda: train_outputs(),
+                                   lambda: test_outputs())
 
             variables = [beta, gamma, moving_mean, moving_variance]
         self.all_layers = list(layer.all_layers)
@@ -176,7 +188,7 @@ def subsample(inputs, factor, scope=None):
         return tl.layers.MaxPool2d(inputs, [1, 1], strides=(factor, factor), name=scope)
 
 
-def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, w_init=None, scope=None):
+def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, w_init=None, scope=None, trainable=None):
     '''
     Reference slim resnet
     :param inputs:
@@ -190,12 +202,13 @@ def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, w_init=None, 
     if strides == 1:
         if rate == 1:
             nets = tl.layers.Conv2d(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
-                                   strides=(strides, strides), W_init=w_init, act=None, padding='SAME', name=scope)
-            nets = tl.layers.BatchNormLayer(nets, act=tf.identity, is_train=True, name=scope+'_bn/BatchNorm')
+                                   strides=(strides, strides), W_init=w_init, act=None, padding='SAME', name=scope,
+                                    use_cudnn_on_gpu=True)
+            nets = BatchNormLayer(nets, act=tf.identity, is_train=True, trainable=trainable, name=scope+'_bn/BatchNorm')
         else:
             nets = tl.layers.AtrousConv2dLayer(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size),
                                                rate=rate, act=None, W_init=w_init, padding='SAME', name=scope)
-            nets = tl.layers.BatchNormLayer(nets, act=tf.identity, is_train=True, name=scope+'_bn/BatchNorm')
+            nets = BatchNormLayer(nets, act=tf.identity, is_train=True, trainable=trainable, name=scope+'_bn/BatchNorm')
         return nets
     else:
         kernel_size_effective = kernel_size + (kernel_size - 1) * (rate - 1)
@@ -205,33 +218,34 @@ def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, w_init=None, 
         inputs = tl.layers.PadLayer(inputs, [[0, 0], [pad_beg, pad_end], [pad_beg, pad_end], [0, 0]], name='padding_%s' % scope)
         if rate == 1:
             nets = tl.layers.Conv2d(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
-                                    strides=(strides, strides), W_init=w_init, act=None, padding='VALID', name=scope)
-            nets = tl.layers.BatchNormLayer(nets, act=tf.identity, is_train=True, name=scope+'_bn/BatchNorm')
+                                    strides=(strides, strides), W_init=w_init, act=None, padding='VALID', name=scope,
+                                    use_cudnn_on_gpu=True)
+            nets = BatchNormLayer(nets, act=tf.identity, is_train=True, trainable=trainable, name=scope+'_bn/BatchNorm')
         else:
             nets = tl.layers.AtrousConv2dLayer(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
                                               rate=rate, act=None, W_init=w_init, padding='SAME', name=scope)
-            nets = tl.layers.BatchNormLayer(nets, act=tf.identity, is_train=True, name=scope+'_bn/BatchNorm')
+            nets = BatchNormLayer(nets, act=tf.identity, is_train=True, trainable=trainable, name=scope+'_bn/BatchNorm')
         return nets
 
 
-def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, scope=None):
+def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, scope=None, trainable=None):
     with tf.variable_scope(scope, 'bottleneck_v1') as sc:
         depth_in = utils.last_dimension(inputs.outputs.get_shape(), min_rank=4)
         if depth == depth_in:
             shortcut = subsample(inputs, stride, 'shortcut')
         else:
             shortcut = tl.layers.Conv2d(inputs, depth, filter_size=(1, 1), strides=(stride, stride), act=None,
-                                        W_init=w_init, b_init=None, name='shortcut_conv')
-            shortcut = tl.layers.BatchNormLayer(shortcut, act=tf.identity, is_train=True, name='shortcut_bn/BatchNorm')
+                                        W_init=w_init, b_init=None, name='shortcut_conv', use_cudnn_on_gpu=True)
+            shortcut = BatchNormLayer(shortcut, act=tf.identity, is_train=True, trainable=trainable, name='shortcut_bn/BatchNorm')
         # bottleneck layer 1
-        residual = tl.layers.BatchNormLayer(inputs, act=tf.identity, is_train=True, name='conv1_bn1')
+        residual = BatchNormLayer(inputs, act=tf.identity, is_train=True, trainable=trainable, name='conv1_bn1')
         residual = tl.layers.Conv2d(residual, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
-                                    W_init=w_init, name='conv1')
-        residual = tl.layers.BatchNormLayer(residual, act=tf.identity, is_train=True, name='conv1_bn2')
+                                    W_init=w_init, name='conv1', use_cudnn_on_gpu=True)
+        residual = BatchNormLayer(residual, act=tf.identity, is_train=True, trainable=trainable, name='conv1_bn2')
         # bottleneck prelu
         residual = tl.layers.PReluLayer(residual)
         # bottleneck layer 2
-        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, w_init=w_init, scope='conv2')
+        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, w_init=w_init, scope='conv2', trainable=trainable)
         output = ElementwiseLayer(layer=[shortcut, residual],
                                   combine_fn=tf.add,
                                   name='combine_layer',
@@ -239,24 +253,24 @@ def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, 
         return output
 
 
-def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, scope=None):
+def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, scope=None, trainable=None):
     with tf.variable_scope(scope, 'bottleneck_v1') as sc:
         depth_in = utils.last_dimension(inputs.outputs.get_shape(), min_rank=4)
         if depth == depth_in:
             shortcut = subsample(inputs, stride, 'shortcut')
         else:
             shortcut = tl.layers.Conv2d(inputs, depth, filter_size=(1, 1), strides=(stride, stride), act=None,
-                                        W_init=w_init, b_init=None, name='shortcut_conv')
-            shortcut = tl.layers.BatchNormLayer(shortcut, act=tf.identity, is_train=True, name='shortcut_bn/BatchNorm')
+                                        W_init=w_init, b_init=None, name='shortcut_conv', use_cudnn_on_gpu=True)
+            shortcut = BatchNormLayer(shortcut, act=tf.identity, is_train=True, trainable=trainable, name='shortcut_bn/BatchNorm')
         # bottleneck layer 1
-        residual = tl.layers.BatchNormLayer(inputs, act=tf.identity, is_train=True, name='conv1_bn1')
+        residual = BatchNormLayer(inputs, act=tf.identity, is_train=True, trainable=trainable, name='conv1_bn1')
         residual = tl.layers.Conv2d(residual, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
-                                    W_init=w_init, name='conv1')
-        residual = tl.layers.BatchNormLayer(residual, act=tf.identity, is_train=True, name='conv1_bn2')
+                                    W_init=w_init, name='conv1', use_cudnn_on_gpu=True)
+        residual = BatchNormLayer(residual, act=tf.identity, is_train=True, trainable=trainable, name='conv1_bn2')
         # bottleneck prelu
         residual = tl.layers.PReluLayer(residual)
         # bottleneck layer 2
-        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, w_init=w_init, scope='conv2')
+        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, w_init=w_init, scope='conv2', trainable=trainable)
         # squeeze
         squeeze = tl.layers.InputLayer(tf.reduce_mean(residual.outputs, axis=[1, 2]), name='squeeze_layer')
         # excitation
@@ -280,15 +294,15 @@ def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, w_init=Non
         return output
 
 
-def resnet(inputs, bottle_neck, blocks, w_init=None, scope=None):
+def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, scope=None):
     with tf.variable_scope(scope):
         # inputs = tf.subtract(inputs, 127.5)
         # inputs = tf.multiply(inputs, 0.0078125)
         net_inputs = tl.layers.InputLayer(inputs, name='input_layer')
         if bottle_neck:
             net = tl.layers.Conv2d(net_inputs, n_filter=64, filter_size=(3, 3), strides=(1, 1),
-                                   act=None, W_init=w_init, b_init=None, name='conv1')
-            net = tl.layers.BatchNormLayer(net, act=tf.identity, name='bn0')
+                                   act=None, W_init=w_init, b_init=None, name='conv1', use_cudnn_on_gpu=True)
+            net = BatchNormLayer(net, act=tf.identity, name='bn0', is_train=True, trainable=trainable)
             net = tl.layers.PReluLayer(net, name='prelu0')
         else:
             raise ValueError('The standard resnet must support the bottleneck layer')
@@ -297,13 +311,14 @@ def resnet(inputs, bottle_neck, blocks, w_init=None, scope=None):
                 for i, var in enumerate(block.args):
                     with tf.variable_scope('unit_%d' % (i+1)):
                         net = block.unit_fn(net, depth=var['depth'], depth_bottleneck=var['depth_bottleneck'],
-                                            w_init=w_init, stride=var['stride'], rate=var['rate'], scope=None)
-        net = tl.layers.BatchNormLayer(net, act=tf.identity, is_train=True, name='E_BN1')
+                                            w_init=w_init, stride=var['stride'], rate=var['rate'], scope=None,
+                                            trainable=trainable)
+        net = BatchNormLayer(net, act=tf.identity, is_train=True, name='E_BN1', trainable=trainable)
         net = tl.layers.DropoutLayer(net, keep=0.4, name='E_Dropout')
         net_shape = net.outputs.get_shape()
         net = tl.layers.ReshapeLayer(net, shape=[-1, net_shape[1]*net_shape[2]*net_shape[3]], name='E_Reshapelayer')
         net = tl.layers.DenseLayer(net, n_units=512, W_init=w_init, name='E_DenseLayer')
-        net = BatchNormLayer(net, act=tf.identity, is_train=True, fix_gamma=False, name='E_BN2')
+        net = BatchNormLayer(net, act=tf.identity, is_train=True, fix_gamma=False, trainable=trainable, name='E_BN2')
         return net
 
 
@@ -346,7 +361,7 @@ def resnetse_v1_block(scope, base_depth, num_units, stride, rate=1, unit_fn=None
   }] * (num_units - 1))
 
 
-def get_resnet(inputs, num_layers, type=None, w_init=None, sess=None):
+def get_resnet(inputs, num_layers, type=None, w_init=None, trainable=None, sess=None):
     if type == 'ir':
         unit_fn = bottleneck_IR
     elif type == 'se_ir':
@@ -381,6 +396,7 @@ def get_resnet(inputs, num_layers, type=None, w_init=None, sess=None):
                  bottle_neck=True,
                  blocks=blocks,
                  w_init=w_init,
+                 trainable=trainable,
                  scope='resnet_v1_%d' % num_layers)
     return net
 
