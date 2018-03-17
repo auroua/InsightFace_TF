@@ -141,7 +141,7 @@ if __name__ == '__main__':
                 end = time.time()
                 pre_sec = args.batch_size/(end - start)
                 # print training information
-                if count > 0 and count % 20 == 0:
+                if count > 0 and count % 1 == 0:
                     print('epoch %d, total_step %d, total loss is %.2f , inference loss is %.2f, weight deacy '
                           'loss is %.2f, training accuracy is %.6f, time %.3f samples/sec' %
                           (i, count, total_loss_val, inference_loss_val, wd_loss_val, acc_val, pre_sec))
@@ -149,7 +149,9 @@ if __name__ == '__main__':
 
                 # save summary
                 if count > 0 and count % args.summary_interval == 0:
-                    summary_op_val = sess.run(summary_op, feed_dict=net.all_drop)
+                    feed_dict = {images: images_train, labels: labels_train, trainable: True}
+                    feed_dict.update(net.all_drop)
+                    summary_op_val = sess.run(summary_op, feed_dict=feed_dict)
                     summary.add_summary(summary_op_val, count)
 
                 # save ckpt files
@@ -165,7 +167,7 @@ if __name__ == '__main__':
                     results = ver_test(ver_list=ver_list, ver_name_list=ver_name_list, nbatch=count, sess=sess,
                              embedding_tensor=embedding_tensor, batch_size=args.batch_size, feed_dict=feed_dict_test,
                              input_placeholder=images)
-                    if max(results) > 0.5:
+                    if max(results) > 0.99:
                         print('best accuracy is %.5f' % max(results))
                         filename = 'InsightFace_iter_best_{:d}'.format(count) + '.ckpt'
                         filename = os.path.join(args.ckpt_path, filename)
