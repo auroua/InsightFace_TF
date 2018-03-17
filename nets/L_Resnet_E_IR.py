@@ -90,7 +90,7 @@ class BatchNormLayer(Layer):
             self,
             layer=None,
             decay=0.9,
-            epsilon=0.00001,
+            epsilon=2e-5,
             act=tf.identity,
             is_train=False,
             fix_gamma=True,

@@ -35,6 +35,7 @@ def get_parser():
     parser.add_argument('--summary_interval', default=300, help='interval to save summary')
     parser.add_argument('--ckpt_interval', default=5000, help='intervals to save ckpt file')
     parser.add_argument('--validate_interval', default=3000, help='intervals to save ckpt file')
+    parser.add_argument('--show_info_interval', default=20, help='intervals to save ckpt file')
     args = parser.parse_args()
     return args
 
@@ -141,7 +142,7 @@ if __name__ == '__main__':
                 end = time.time()
                 pre_sec = args.batch_size/(end - start)
                 # print training information
-                if count > 0 and count % 1 == 0:
+                if count > 0 and count % args.show_info_interval == 0:
                     print('epoch %d, total_step %d, total loss is %.2f , inference loss is %.2f, weight deacy '
                           'loss is %.2f, training accuracy is %.6f, time %.3f samples/sec' %
                           (i, count, total_loss_val, inference_loss_val, wd_loss_val, acc_val, pre_sec))
