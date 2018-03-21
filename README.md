@@ -66,9 +66,9 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 
 
 #### pretrained model download link
-* [resnet_v1_50](download.tensorflow.org/models/resnet_v1_50_2016_08_28.tar.gz)
-* [resnet_v1_101](download.tensorflow.org/models/resnet_v1_101_2016_08_28.tar.gz)
-* [resnet_v1_152](download.tensorflow.org/models/resnet_v1_152_2016_08_28.tar.gz)
+* [resnet_v1_50](http://download.tensorflow.org/models/resnet_v1_50_2016_08_28.tar.gz)
+* [resnet_v1_101](http://download.tensorflow.org/models/resnet_v1_101_2016_08_28.tar.gz)
+* [resnet_v1_152](http://download.tensorflow.org/models/resnet_v1_152_2016_08_28.tar.gz)
 * [vgg16](http://www.cs.toronto.edu/~frossard/post/vgg16/)
 * [vgg19](https://github.com/machrisaa/tensorflow-vgg)
 
