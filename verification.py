@@ -244,7 +244,6 @@ def ver_test(ver_list, ver_name_list, nbatch, sess, embedding_tensor, batch_size
                                                               batch_size=batch_size, feed_dict=feed_dict,
                                                               input_placeholder=input_placeholder)
         print('[%s][%d]XNorm: %f' % (ver_name_list[i], nbatch, xnorm))
-        #print('[%s][%d]Accuracy: %1.5f+-%1.5f' % (ver_name_list[i], nbatch, acc1, std1))
         print('[%s][%d]Accuracy-Flip: %1.5f+-%1.5f' % (ver_name_list[i], nbatch, acc2, std2))
         results.append(acc2)
     return results

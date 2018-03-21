@@ -10,6 +10,7 @@
 * ~~CosineFace Loss~~
 * ~~train network code~~
 * ~~add validate during training~~
+* ~~multi-gpu training~~
 * evaluate code
 
 #### Training Logs
@@ -25,6 +26,12 @@ epoch 0, total_step 160, total loss is 103.26 , inference loss is 73.17, weight 
 epoch 0, total_step 180, total loss is 98.61 , inference loss is 69.07, weight deacy loss is 29.54, training accuracy is 0.000000, time 38.198 samples/sec
 epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight deacy loss is 29.04, training accuracy is 0.000000, time 38.217 samples/sec
 ```
+
+
+#### Training Tips(Continual updates)
+* If you can't use large batch size(>128), you should use small learning rate
+* If you can't use large batch size(>128), you can try batch renormalization(file L_Resnet_E_IR_RBN.py)
+
 
 #### Requirements
 1. TensorFlow 1.4 1.6

@@ -16,12 +16,12 @@ def get_parser():
     parser.add_argument('--net_depth', default=50, help='resnet depth, default is 50')
     parser.add_argument('--epoch', default=100000, help='epoch to train the network')
     parser.add_argument('--batch_size', default=16, help='batch size to train network')
-    parser.add_argument('--lr', default=0.1, help='learning rate to train network')
+    parser.add_argument('--lr', default=0.05, help='learning rate to train network')
     parser.add_argument('--lr_steps', default=[40000, 60000, 80000], help='learning rate to train network')
     parser.add_argument('--momentum', default=0.9, help='learning alg momentum')
-    parser.add_argument('--weight_deacy', default=5e-4, help='learning alg momentum')
+    parser.add_argument('--weight_deacy', default=2e-4, help='learning alg momentum')
     # parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff', 'cfp_fp', 'agedb_30'], help='evluation datasets')
-    parser.add_argument('--eval_datasets', default=['lfw'], help='evluation datasets')
+    parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff'], help='evluation datasets')
     parser.add_argument('--eval_db_path', default='./datasets/faces_ms1m_112x112', help='evluate datasets base path')
     parser.add_argument('--image_size', default=[112, 112], help='the image size')
     parser.add_argument('--num_output', default=85164, help='the image size')
@@ -29,12 +29,12 @@ def get_parser():
                         help='path to the output of tfrecords file path')
     parser.add_argument('--summary_path', default='./output/summary', help='the summary file save path')
     parser.add_argument('--ckpt_path', default='./output/ckpt', help='the ckpt file save path')
-    parser.add_argument('--saver_maxkeep', default=1000, help='tf.train.Saver max keep ckpt files')
-    parser.add_argument('--buffer_size', default=10000, help='tf dataset api buffer size')
+    parser.add_argument('--saver_maxkeep', default=100, help='tf.train.Saver max keep ckpt files')
+    parser.add_argument('--buffer_size', default=20000, help='tf dataset api buffer size')
     parser.add_argument('--log_device_mapping', default=False, help='show device placement log')
     parser.add_argument('--summary_interval', default=300, help='interval to save summary')
-    parser.add_argument('--ckpt_interval', default=5000, help='intervals to save ckpt file')
-    parser.add_argument('--validate_interval', default=3000, help='intervals to save ckpt file')
+    parser.add_argument('--ckpt_interval', default=10000, help='intervals to save ckpt file')
+    parser.add_argument('--validate_interval', default=2000, help='intervals to save ckpt file')
     parser.add_argument('--show_info_interval', default=20, help='intervals to save ckpt file')
     args = parser.parse_args()
     return args
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     dataset = dataset.batch(args.batch_size)
     iterator = dataset.make_initializable_iterator()
     next_element = iterator.get_next()
-    #2.2 prepare validate datasets
+    # 2.2 prepare validate datasets
     ver_list = []
     ver_name_list = []
     for db in args.eval_datasets:
@@ -81,19 +81,24 @@ if __name__ == '__main__':
     wd_loss = 0
     for weights in tl.layers.get_variables_with_name('W_conv2d', True, True):
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
+    for gamma in tl.layers.get_variables_with_name('gamma', True, True):
+        wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(gamma)
+    for alphas in tl.layers.get_variables_with_name('alphas', True, True):
+        wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(alphas)
     # 3.5 total losses
     total_loss = inference_loss + wd_loss
     # 3.6 define the learning rate schedule
     p = int(512.0/args.batch_size)
     lr_steps = [p*val for val in args.lr_steps]
     print(lr_steps)
-    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.1, 0.01, 0.001, 0.0001], name='lr_schedule')
+    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.01, 0.001, 0.0001, 0.00001], name='lr_schedule')
     # 3.7 define the optimize method
     opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=args.momentum)
     # 3.8 get train op
-    with tf.control_dependencies([total_loss]):
-        grads = opt.compute_gradients(total_loss)
-    train_op = opt.apply_gradients(grads, global_step=global_step)
+    grads = opt.compute_gradients(total_loss)
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+        train_op = opt.apply_gradients(grads, global_step=global_step)
     # train_op = opt.minimize(total_loss, global_step=global_step)
     # 3.9 define the inference accuracy used during validate or test
     pred = tf.nn.softmax(logit)
@@ -175,3 +180,4 @@ if __name__ == '__main__':
                         saver.save(sess, filename)
             except tf.errors.OutOfRangeError:
                 print("End of epoch %d" % i)
+                break

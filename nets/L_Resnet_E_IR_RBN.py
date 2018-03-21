@@ -55,132 +55,6 @@ class ElementwiseLayer(Layer):
         self.all_params = list_remove_repeat(self.all_params)
 
 
-class BatchNormLayer(Layer):
-    """
-    The :class:`BatchNormLayer` class is a normalization layer, see ``tf.nn.batch_normalization`` and ``tf.nn.moments``.
-
-    Batch normalization on fully-connected or convolutional maps.
-
-    Parameters
-    -----------
-    layer : a :class:`Layer` instance
-        The `Layer` class feeding into this layer.
-    decay : float, default is 0.9.
-        A decay factor for ExponentialMovingAverage, use larger value for large dataset.
-    epsilon : float
-        A small float number to avoid dividing by 0.
-    act : activation function.
-    is_train : boolean
-        Whether train or inference.
-    beta_init : beta initializer
-        The initializer for initializing beta
-    gamma_init : gamma initializer
-        The initializer for initializing gamma
-    dtype : tf.float32 (default) or tf.float16
-    name : a string or None
-        An optional name to attach to this layer.
-
-    References
-    ----------
-    - `Source <https://github.com/ry/tensorflow-resnet/blob/master/resnet.py>`_
-    - `stackoverflow <http://stackoverflow.com/questions/38312668/how-does-one-do-inference-with-batch-normalization-with-tensor-flow>`_
-    """
-
-    def __init__(
-            self,
-            layer=None,
-            decay=0.9,
-            epsilon=2e-5,
-            act=tf.identity,
-            is_train=False,
-            fix_gamma=True,
-            beta_init=tf.zeros_initializer,
-            gamma_init=tf.random_normal_initializer(mean=1.0, stddev=0.002),  # tf.ones_initializer,
-            # dtype = tf.float32,
-            trainable=None,
-            name='batchnorm_layer',
-    ):
-        Layer.__init__(self, name=name)
-        self.inputs = layer.outputs
-        print("  [TL] BatchNormLayer %s: decay:%f epsilon:%f act:%s is_train:%s" % (self.name, decay, epsilon, act.__name__, is_train))
-        x_shape = self.inputs.get_shape()
-        params_shape = x_shape[-1:]
-
-        from tensorflow.python.training import moving_averages
-        from tensorflow.python.ops import control_flow_ops
-
-        with tf.variable_scope(name) as vs:
-            axis = list(range(len(x_shape) - 1))
-
-            ## 1. beta, gamma
-            if tf.__version__ > '0.12.1' and beta_init == tf.zeros_initializer:
-                beta_init = beta_init()
-            beta = tf.get_variable('beta', shape=params_shape, initializer=beta_init, dtype=tf.float32, trainable=is_train)  #, restore=restore)
-
-            gamma = tf.get_variable(
-                'gamma',
-                shape=params_shape,
-                initializer=gamma_init,
-                dtype=tf.float32,
-                trainable=fix_gamma,
-            )  #restore=restore)
-
-            ## 2.
-            if tf.__version__ > '0.12.1':
-                moving_mean_init = tf.zeros_initializer()
-            else:
-                moving_mean_init = tf.zeros_initializer
-            moving_mean = tf.get_variable('moving_mean', params_shape, initializer=moving_mean_init, dtype=tf.float32, trainable=False)  #   restore=restore)
-            moving_variance = tf.get_variable(
-                'moving_variance',
-                params_shape,
-                initializer=tf.constant_initializer(1.),
-                dtype=tf.float32,
-                trainable=False,
-            )  #   restore=restore)
-
-            ## 3.
-            # These ops will only be preformed when training.
-            mean, variance = tf.nn.moments(self.inputs, axis)
-            try:  # TF12
-                update_moving_mean = moving_averages.assign_moving_average(moving_mean, mean, decay, zero_debias=False)  # if zero_debias=True, has bias
-                update_moving_variance = moving_averages.assign_moving_average(
-                    moving_variance, variance, decay, zero_debias=False)  # if zero_debias=True, has bias
-                # print("TF12 moving")
-            except Exception as e:  # TF11
-                update_moving_mean = moving_averages.assign_moving_average(moving_mean, mean, decay)
-                update_moving_variance = moving_averages.assign_moving_average(moving_variance, variance, decay)
-                # print("TF11 moving")
-
-            def mean_var_with_update():
-                with tf.control_dependencies([update_moving_mean, update_moving_variance]):
-                    return tf.identity(mean), tf.identity(variance)
-
-            # if is_train:
-            #     mean, var = mean_var_with_update()
-            #     self.outputs = act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
-            # else:
-            #     self.outputs = act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
-
-            def train_outputs():
-                mean, var = mean_var_with_update()
-                return act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
-
-            def test_outputs():
-                return act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
-
-            self.outputs = tf.cond(trainable,
-                                   lambda: train_outputs(),
-                                   lambda: test_outputs())
-
-            variables = [beta, gamma, moving_mean, moving_variance]
-        self.all_layers = list(layer.all_layers)
-        self.all_params = list(layer.all_params)
-        self.all_drop = dict(layer.all_drop)
-        self.all_layers.extend([self.outputs])
-        self.all_params.extend(variables)
-
-
 def subsample(inputs, factor, scope=None):
     if factor == 1:
         return inputs
@@ -204,11 +78,25 @@ def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, w_init=None, 
             nets = tl.layers.Conv2d(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
                                    strides=(strides, strides), W_init=w_init, act=None, padding='SAME', name=scope,
                                     use_cudnn_on_gpu=True)
-            nets = BatchNormLayer(nets, act=tf.identity, is_train=True, trainable=trainable, name=scope+'_bn/BatchNorm')
+            nets.outputs = tf.layers.batch_normalization(inputs=nets.outputs,
+                                                         momentum=0.9,
+                                                         training=trainable,
+                                                         renorm=True,
+                                                         renorm_clipping={'rmax':3, 'rmin':0.3333,
+                                                                          'dmax':5},
+                                                         renorm_momentum=0.9,
+                                                         name=scope+'_bn/BatchNorm')
         else:
             nets = tl.layers.AtrousConv2dLayer(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size),
                                                rate=rate, act=None, W_init=w_init, padding='SAME', name=scope)
-            nets = BatchNormLayer(nets, act=tf.identity, is_train=True, trainable=trainable, name=scope+'_bn/BatchNorm')
+            nets.outputs = tf.layers.batch_normalization(inputs=nets.outputs,
+                                                         momentum=0.9,
+                                                         training=trainable,
+                                                         renorm=True,
+                                                         renorm_clipping={'rmax':3, 'rmin':0.3333,
+                                                                          'dmax':5},
+                                                         renorm_momentum=0.9,
+                                                         name=scope+'_bn/BatchNorm')
         return nets
     else:
         kernel_size_effective = kernel_size + (kernel_size - 1) * (rate - 1)
@@ -220,11 +108,25 @@ def conv2d_same(inputs, num_outputs, kernel_size, strides, rate=1, w_init=None, 
             nets = tl.layers.Conv2d(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
                                     strides=(strides, strides), W_init=w_init, act=None, padding='VALID', name=scope,
                                     use_cudnn_on_gpu=True)
-            nets = BatchNormLayer(nets, act=tf.identity, is_train=True, trainable=trainable, name=scope+'_bn/BatchNorm')
+            nets.outputs = tf.layers.batch_normalization(inputs=nets.outputs,
+                                                         momentum=0.9,
+                                                         training=trainable,
+                                                         renorm=True,
+                                                         renorm_clipping={'rmax':3, 'rmin':0.3333,
+                                                                          'dmax':5},
+                                                         renorm_momentum=0.9,
+                                                         name=scope+'_bn/BatchNorm')
         else:
             nets = tl.layers.AtrousConv2dLayer(inputs, n_filter=num_outputs, filter_size=(kernel_size, kernel_size), b_init=None,
                                               rate=rate, act=None, W_init=w_init, padding='SAME', name=scope)
-            nets = BatchNormLayer(nets, act=tf.identity, is_train=True, trainable=trainable, name=scope+'_bn/BatchNorm')
+            nets.outputs = tf.layers.batch_normalization(inputs=nets.outputs,
+                                                         momentum=0.9,
+                                                         training=trainable,
+                                                         renorm=True,
+                                                         renorm_clipping={'rmax':3, 'rmin':0.3333,
+                                                                          'dmax':5},
+                                                         renorm_momentum=0.9,
+                                                         name=scope+'_bn/BatchNorm')
         return nets
 
 
@@ -236,12 +138,33 @@ def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, 
         else:
             shortcut = tl.layers.Conv2d(inputs, depth, filter_size=(1, 1), strides=(stride, stride), act=None,
                                         W_init=w_init, b_init=None, name='shortcut_conv', use_cudnn_on_gpu=True)
-            shortcut = BatchNormLayer(shortcut, act=tf.identity, is_train=True, trainable=trainable, name='shortcut_bn/BatchNorm')
+            shortcut.outputs = tf.layers.batch_normalization(inputs=shortcut.outputs,
+                                                             momentum=0.9,
+                                                             training=trainable,
+                                                             renorm=True,
+                                                             renorm_clipping={'rmax': 3, 'rmin': 0.3333,
+                                                                              'dmax': 5},
+                                                             renorm_momentum=0.9,
+                                                             name='shortcut_bn/BatchNorm')
         # bottleneck layer 1
-        residual = BatchNormLayer(inputs, act=tf.identity, is_train=True, trainable=trainable, name='conv1_bn1')
-        residual = tl.layers.Conv2d(residual, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
+        inputs.outputs = tf.layers.batch_normalization(inputs=inputs.outputs,
+                                                         momentum=0.9,
+                                                         training=trainable,
+                                                         renorm=True,
+                                                         renorm_clipping={'rmax': 3, 'rmin': 0.3333,
+                                                                          'dmax': 5},
+                                                         renorm_momentum=0.9,
+                                                         name='conv1_bn1')
+        residual = tl.layers.Conv2d(inputs, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
                                     W_init=w_init, name='conv1', use_cudnn_on_gpu=True)
-        residual = BatchNormLayer(residual, act=tf.identity, is_train=True, trainable=trainable, name='conv1_bn2')
+        residual.outputs = tf.layers.batch_normalization(inputs=residual.outputs,
+                                                         momentum=0.9,
+                                                         training=trainable,
+                                                         renorm=True,
+                                                         renorm_clipping={'rmax': 3, 'rmin': 0.3333,
+                                                                          'dmax': 5},
+                                                         renorm_momentum=0.9,
+                                                         name='conv1_bn2')
         # bottleneck prelu
         residual = tl.layers.PReluLayer(residual)
         # bottleneck layer 2
@@ -253,47 +176,6 @@ def bottleneck_IR(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, 
         return output
 
 
-def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, w_init=None, scope=None, trainable=None):
-    with tf.variable_scope(scope, 'bottleneck_v1') as sc:
-        depth_in = utils.last_dimension(inputs.outputs.get_shape(), min_rank=4)
-        if depth == depth_in:
-            shortcut = subsample(inputs, stride, 'shortcut')
-        else:
-            shortcut = tl.layers.Conv2d(inputs, depth, filter_size=(1, 1), strides=(stride, stride), act=None,
-                                        W_init=w_init, b_init=None, name='shortcut_conv', use_cudnn_on_gpu=True)
-            shortcut = BatchNormLayer(shortcut, act=tf.identity, is_train=True, trainable=trainable, name='shortcut_bn/BatchNorm')
-        # bottleneck layer 1
-        residual = BatchNormLayer(inputs, act=tf.identity, is_train=True, trainable=trainable, name='conv1_bn1')
-        residual = tl.layers.Conv2d(residual, depth_bottleneck, filter_size=(3, 3), strides=(1, 1), act=None, b_init=None,
-                                    W_init=w_init, name='conv1', use_cudnn_on_gpu=True)
-        residual = BatchNormLayer(residual, act=tf.identity, is_train=True, trainable=trainable, name='conv1_bn2')
-        # bottleneck prelu
-        residual = tl.layers.PReluLayer(residual)
-        # bottleneck layer 2
-        residual = conv2d_same(residual, depth, kernel_size=3, strides=stride, rate=rate, w_init=w_init, scope='conv2', trainable=trainable)
-        # squeeze
-        squeeze = tl.layers.InputLayer(tf.reduce_mean(residual.outputs, axis=[1, 2]), name='squeeze_layer')
-        # excitation
-        excitation1 = tl.layers.DenseLayer(squeeze, n_units=int(depth/16.0), act=tf.nn.relu,
-                                           W_init=w_init, name='excitation_1')
-        # excitation1 = tl.layers.PReluLayer(excitation1, name='excitation_prelu')
-        excitation2 = tl.layers.DenseLayer(excitation1, n_units=depth, act=tf.nn.sigmoid,
-                                           W_init=w_init, name='excitation_2')
-        # scale
-        scale = tl.layers.ReshapeLayer(excitation2, shape=[tf.shape(excitation2.outputs)[0], 1, 1, depth], name='excitation_reshape')
-
-        residual_se = ElementwiseLayer(layer=[residual, scale],
-                                       combine_fn=tf.multiply,
-                                       name='scale_layer',
-                                       act=None)
-
-        output = ElementwiseLayer(layer=[shortcut, residual_se],
-                                  combine_fn=tf.add,
-                                  name='combine_layer',
-                                  act=tf.nn.relu)
-        return output
-
-
 def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, scope=None):
     with tf.variable_scope(scope):
         # inputs = tf.subtract(inputs, 127.5)
@@ -302,7 +184,14 @@ def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, scope=None)
         if bottle_neck:
             net = tl.layers.Conv2d(net_inputs, n_filter=64, filter_size=(3, 3), strides=(1, 1),
                                    act=None, W_init=w_init, b_init=None, name='conv1', use_cudnn_on_gpu=True)
-            net = BatchNormLayer(net, act=tf.identity, name='bn0', is_train=True, trainable=trainable)
+            net.outputs = tf.layers.batch_normalization(inputs=net.outputs,
+                                                             momentum=0.9,
+                                                             training=trainable,
+                                                             renorm=True,
+                                                             renorm_clipping={'rmax': 3, 'rmin': 0.3333,
+                                                                              'dmax': 5},
+                                                             renorm_momentum=0.9,
+                                                             name='bn0')
             net = tl.layers.PReluLayer(net, name='prelu0')
         else:
             raise ValueError('The standard resnet must support the bottleneck layer')
@@ -313,12 +202,26 @@ def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, scope=None)
                         net = block.unit_fn(net, depth=var['depth'], depth_bottleneck=var['depth_bottleneck'],
                                             w_init=w_init, stride=var['stride'], rate=var['rate'], scope=None,
                                             trainable=trainable)
-        net = BatchNormLayer(net, act=tf.identity, is_train=True, name='E_BN1', trainable=trainable)
-        # net = tl.layers.DropoutLayer(net, keep=0.4, name='E_Dropout')
+        net.outputs = tf.layers.batch_normalization(inputs=net.outputs,
+                                                    momentum=0.9,
+                                                    training=trainable,
+                                                    renorm=True,
+                                                    renorm_clipping={'rmax': 3, 'rmin': 0.3333,
+                                                                     'dmax': 5},
+                                                    renorm_momentum=0.9,
+                                                    name='E_BN1')
+        net = tl.layers.DropoutLayer(net, keep=0.4, name='E_Dropout')
         net_shape = net.outputs.get_shape()
         net = tl.layers.ReshapeLayer(net, shape=[-1, net_shape[1]*net_shape[2]*net_shape[3]], name='E_Reshapelayer')
         net = tl.layers.DenseLayer(net, n_units=512, W_init=w_init, name='E_DenseLayer')
-        net = BatchNormLayer(net, act=tf.identity, is_train=True, fix_gamma=False, trainable=trainable, name='E_BN2')
+        net.outputs = tf.layers.batch_normalization(inputs=net.outputs,
+                                                    momentum=0.9,
+                                                    training=trainable,
+                                                    renorm=True,
+                                                    renorm_clipping={'rmax': 3, 'rmin': 0.3333,
+                                                                     'dmax': 5},
+                                                    renorm_momentum=0.9,
+                                                    name='E_BN2')
         return net
 
 
@@ -364,8 +267,8 @@ def resnetse_v1_block(scope, base_depth, num_units, stride, rate=1, unit_fn=None
 def get_resnet(inputs, num_layers, type=None, w_init=None, trainable=None, sess=None):
     if type == 'ir':
         unit_fn = bottleneck_IR
-    elif type == 'se_ir':
-        unit_fn = bottleneck_IR_SE
+    # elif type == 'se_ir':
+    #     unit_fn = bottleneck_IR_SE
     else:
         raise ValueError('the input fn is unknown')
 
