@@ -21,7 +21,7 @@ def get_parser():
     parser.add_argument('--momentum', default=0.9, help='learning alg momentum')
     parser.add_argument('--weight_deacy', default=1e-4, help='learning alg momentum')
     # parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff', 'cfp_fp', 'agedb_30'], help='evluation datasets')
-    parser.add_argument('--eval_datasets', default=['lfw'], help='evluation datasets')
+    parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff'], help='evluation datasets')
     parser.add_argument('--eval_db_path', default='./datasets/faces_ms1m_112x112', help='evluate datasets base path')
     parser.add_argument('--image_size', default=[112, 112], help='the image size')
     parser.add_argument('--num_output', default=85164, help='the image size')
@@ -34,7 +34,7 @@ def get_parser():
     parser.add_argument('--log_device_mapping', default=True, help='show device placement log')
     parser.add_argument('--summary_interval', default=300, help='interval to save summary')
     parser.add_argument('--ckpt_interval', default=10000, help='intervals to save ckpt file')
-    parser.add_argument('--validate_interval', default=2000, help='intervals to save ckpt file')
+    parser.add_argument('--validate_interval', default=1000, help='intervals to save ckpt file')
     parser.add_argument('--show_info_interval', default=20, help='intervals to show information')
     parser.add_argument('--num_gpus', default=2, help='the num of gpus')
     parser.add_argument('--tower_name', default='tower', help='tower name')
@@ -137,12 +137,13 @@ if __name__ == '__main__':
             logit = arcface_loss(embedding=net.outputs, labels=labels_s[i], w_init=w_init_method, out_num=args.num_output)
             # Reuse variables for the next tower.
             tf.get_variable_scope().reuse_variables()
-
             # define the cross entropy
             inference_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=labels_s[i]))
             # define weight deacy losses
             wd_loss = 0
             for weights in tl.layers.get_variables_with_name('W_conv2d', True, True):
+                wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
+            for weights in tl.layers.get_variables_with_name('embedding_weights', True, True):
                 wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
             for gamma in tl.layers.get_variables_with_name('gamma', True, True):
                 wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(gamma)
