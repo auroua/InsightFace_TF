@@ -14,12 +14,11 @@ from verification import ver_test
 def get_parser():
     parser = argparse.ArgumentParser(description='parameters to train net')
     parser.add_argument('--net_depth', default=50, help='resnet depth, default is 50')
-    parser.add_argument('--epoch', default=1, help='epoch to train the network')
-    parser.add_argument('--batch_size', default=32, help='batch size to train network')
-    parser.add_argument('--lr', default=0.01, help='learning rate to train network')
+    parser.add_argument('--epoch', default=100000, help='epoch to train the network')
+    parser.add_argument('--batch_size', default=32, help='batch size                                                                                            to train network')
     parser.add_argument('--lr_steps', default=[40000, 60000, 80000], help='learning rate to train network')
     parser.add_argument('--momentum', default=0.9, help='learning alg momentum')
-    parser.add_argument('--weight_deacy', default=1e-4, help='learning alg momentum')
+    parser.add_argument('--weight_deacy', default=5e-3, help='learning alg momentum')
     # parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff', 'cfp_fp', 'agedb_30'], help='evluation datasets')
     parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff'], help='evluation datasets')
     parser.add_argument('--eval_db_path', default='./datasets/faces_ms1m_112x112', help='evluate datasets base path')
@@ -30,10 +29,10 @@ def get_parser():
     parser.add_argument('--summary_path', default='./output/summary', help='the summary file save path')
     parser.add_argument('--ckpt_path', default='./output/ckpt', help='the ckpt file save path')
     parser.add_argument('--saver_maxkeep', default=100, help='tf.train.Saver max keep ckpt files')
-    parser.add_argument('--buffer_size', default=20000, help='tf dataset api buffer size')
-    parser.add_argument('--log_device_mapping', default=True, help='show device placement log')
+    parser.add_argument('--buffer_size', default=50000, help='tf dataset api buffer size')
+    parser.add_argument('--log_device_mapping', default=False, help='show device placement log')
     parser.add_argument('--summary_interval', default=300, help='interval to save summary')
-    parser.add_argument('--ckpt_interval', default=10000, help='intervals to save ckpt file')
+    parser.add_argument('--ckpt_interval', default=5000, help='intervals to save ckpt file')
     parser.add_argument('--validate_interval', default=1000, help='intervals to save ckpt file')
     parser.add_argument('--show_info_interval', default=20, help='intervals to show information')
     parser.add_argument('--num_gpus', default=2, help='the num of gpus')
@@ -119,7 +118,7 @@ if __name__ == '__main__':
     p = int(512.0/args.batch_size)
     lr_steps = [p*val for val in args.lr_steps]
     print('learning rate steps: ', lr_steps)
-    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.01, 0.001, 0.0001, 0.00001], name='lr_schedule')
+    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.001, 0.0001, 0.00005, 0.00001], name='lr_schedule')
     # 3.3 define the optimize method
     opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=args.momentum)
 
@@ -143,12 +142,18 @@ if __name__ == '__main__':
             wd_loss = 0
             for weights in tl.layers.get_variables_with_name('W_conv2d', True, True):
                 wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
+            for W in tl.layers.get_variables_with_name('resnet_v1_50/E_DenseLayer/W', True, True):
+                wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(W)
             for weights in tl.layers.get_variables_with_name('embedding_weights', True, True):
                 wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
             for gamma in tl.layers.get_variables_with_name('gamma', True, True):
                 wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(gamma)
+            for beta in tl.layers.get_variables_with_name('beta', True, True):
+                wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(beta)
             for alphas in tl.layers.get_variables_with_name('alphas', True, True):
                 wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(alphas)
+            for bias in tl.layers.get_variables_with_name('resnet_v1_50/E_DenseLayer/b', True, True):
+                wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(bias)
             total_loss = inference_loss + wd_loss
 
             loss_dict[('inference_loss_%s_%d' % ('gpu', i))] = inference_loss

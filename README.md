@@ -30,8 +30,9 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 
 #### Training Tips(Continual updates)
 * If you can't use large batch size(>128), you should use small learning rate
-* If you can't use large batch size(>128), you can try batch renormalization(file L_Resnet_E_IR_RBN.py)
-
+* If you can't use large batch size(>128), you can try batch renormalization(file `L_Resnet_E_IR_RBN.py`)
+* If use multiple gpus, you should keep at least 16 images each gpu.
+* Try [Group Normalization](https://arxiv.org/pdf/1803.08494.pdf), you can use the code `L_Resnet_E_IR_GBN.py`
 
 #### Requirements
 1. TensorFlow 1.4 1.6
@@ -76,6 +77,7 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 #### References
 1. [InsightFace mxnet](https://github.com/deepinsight/insightface)
 2. [InsightFace : Additive Angular Margin Loss for Deep Face Recognition](https://arxiv.org/abs/1801.07698)
+3. [Group Normalization](https://arxiv.org/pdf/1803.08494.pdf)
 3. [tensorlayer_vgg16](https://github.com/tensorlayer/tensorlayer/blob/master/example/tutorial_vgg16.py)
 4. [tensorlayer_vgg19](https://github.com/tensorlayer/tensorlayer/blob/master/example/tutorial_vgg19.py)
 5. [tf_slim](https://github.com/tensorflow/models/tree/master/research/slim)

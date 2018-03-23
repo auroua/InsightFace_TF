@@ -495,3 +495,82 @@ class DenseLayer(Layer):
             self.all_params.extend([W, b])
         else:
             self.all_params.extend([W])
+
+
+## Group Batch Normalization layer
+class GroupNormLayer(Layer):
+    """
+    The :class:`GroupNormLayer` class is a implementation of Group Normalization.
+
+    Parameters
+    ----------
+    layer : a :class:`Layer` instance
+        The `Layer` class feeding into this layer.
+    n_units : int
+        The number of units of the layer.
+    act : activation function
+        The function that is applied to the layer activations.
+    W_init : weights initializer
+        The initializer for initializing the weight matrix.
+    b_init : biases initializer or None
+        The initializer for initializing the bias vector. If None, skip biases.
+    W_init_args : dictionary
+        The arguments for the weights tf.get_variable.
+    b_init_args : dictionary
+        The arguments for the biases tf.get_variable.
+    name : a string or None
+        An optional name to attach to this layer.
+
+    Examples
+    --------
+
+
+    Notes
+    -----
+    If the input to this layer has more than two axes, it need to flatten the
+    input by using :class:`FlattenLayer` in this case.
+    """
+
+    def __init__(
+            self,
+            layer=None,
+            n_units=100,
+            act=tf.identity,
+            W_init=tf.truncated_normal_initializer(stddev=0.1),
+            b_init=tf.constant_initializer(value=0.0),
+            W_init_args={},
+            b_init_args={},
+            name='dense_layer',
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+        if self.inputs.get_shape().ndims != 2:
+            raise Exception("The input dimension must be rank 2, please reshape or flatten it")
+
+        n_in = int(self.inputs.get_shape()[-1])
+        self.n_units = n_units
+        print("  [TL] DenseLayer  %s: %d %s" % (self.name, self.n_units, act.__name__))
+        with tf.variable_scope(name) as vs:
+            with tf.device('/cpu:0'):
+                W = tf.get_variable(name='W', shape=(n_in, n_units), initializer=W_init, dtype=D_TYPE, **W_init_args)
+            if b_init is not None:
+                try:
+                    with tf.device('/cpu:0'):
+                        b = tf.get_variable(name='b', shape=(n_units), initializer=b_init, dtype=D_TYPE, **b_init_args)
+                except:  # If initializer is a constant, do not specify shape.
+                    with tf.device('/cpu:0'):
+                        b = tf.get_variable(name='b', initializer=b_init, dtype=D_TYPE, **b_init_args)
+                self.outputs = act(tf.matmul(self.inputs, W) + b)
+            else:
+                self.outputs = act(tf.matmul(self.inputs, W))
+
+        # Hint : list(), dict() is pass by value (shallow), without them, it is
+        # pass by reference.
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+        self.all_layers.extend([self.outputs])
+        if b_init is not None:
+            self.all_params.extend([W, b])
+        else:
+            self.all_params.extend([W])
