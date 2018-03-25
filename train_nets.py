@@ -19,7 +19,7 @@ def get_parser():
     parser.add_argument('--batch_size', default=10, help='batch size to train network')
     parser.add_argument('--lr_steps', default=[40000, 60000, 80000], help='learning rate to train network')
     parser.add_argument('--momentum', default=0.9, help='learning alg momentum')
-    parser.add_argument('--weight_deacy', default=1e-3, help='learning alg momentum')
+    parser.add_argument('--weight_deacy', default=5e-3, help='learning alg momentum')
     # parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff', 'cfp_fp', 'agedb_30'], help='evluation datasets')
     parser.add_argument('--eval_datasets', default=['lfw'], help='evluation datasets')
     parser.add_argument('--eval_db_path', default='./datasets/faces_ms1m_112x112', help='evluate datasets base path')
@@ -91,8 +91,8 @@ if __name__ == '__main__':
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
     for gamma in tl.layers.get_variables_with_name('gamma', True, True):
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(gamma)
-    # for beta in tl.layers.get_variables_with_name('beta', True, True):
-    #     wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(beta)
+    for beta in tl.layers.get_variables_with_name('beta', True, True):
+        wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(beta)
     for alphas in tl.layers.get_variables_with_name('alphas', True, True):
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(alphas)
     # for bias in tl.layers.get_variables_with_name('resnet_v1_50/E_DenseLayer/b', True, True):
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     p = int(512.0/args.batch_size)
     lr_steps = [p*val for val in args.lr_steps]
     print(lr_steps)
-    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.00006, 0.00003, 0.00002, 0.000005], name='lr_schedule')
+    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.00005, 0.00001, 0.000005, 0.000001], name='lr_schedule')
     # 3.7 define the optimize method
     opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=args.momentum)
     # 3.8 get train op
