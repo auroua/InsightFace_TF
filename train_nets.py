@@ -3,7 +3,8 @@ import tensorlayer as tl
 import argparse
 from data.mx2tfrecords import parse_function
 import os
-from nets.L_Resnet_E_IR import get_resnet
+# from nets.L_Resnet_E_IR import get_resnet
+from nets.L_Resnet_E_IR_GBN import get_resnet
 from losses.face_losses import arcface_loss
 from tensorflow.core.protobuf import config_pb2
 import time
@@ -15,12 +16,12 @@ def get_parser():
     parser = argparse.ArgumentParser(description='parameters to train net')
     parser.add_argument('--net_depth', default=50, help='resnet depth, default is 50')
     parser.add_argument('--epoch', default=100000, help='epoch to train the network')
-    parser.add_argument('--batch_size', default=16, help='batch size to train network')
+    parser.add_argument('--batch_size', default=10, help='batch size to train network')
     parser.add_argument('--lr_steps', default=[40000, 60000, 80000], help='learning rate to train network')
     parser.add_argument('--momentum', default=0.9, help='learning alg momentum')
-    parser.add_argument('--weight_deacy', default=5e-3, help='learning alg momentum')
+    parser.add_argument('--weight_deacy', default=1e-3, help='learning alg momentum')
     # parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff', 'cfp_fp', 'agedb_30'], help='evluation datasets')
-    parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff'], help='evluation datasets')
+    parser.add_argument('--eval_datasets', default=['lfw'], help='evluation datasets')
     parser.add_argument('--eval_db_path', default='./datasets/faces_ms1m_112x112', help='evluate datasets base path')
     parser.add_argument('--image_size', default=[112, 112], help='the image size')
     parser.add_argument('--num_output', default=85164, help='the image size')
@@ -33,7 +34,7 @@ def get_parser():
     parser.add_argument('--log_device_mapping', default=False, help='show device placement log')
     parser.add_argument('--summary_interval', default=300, help='interval to save summary')
     parser.add_argument('--ckpt_interval', default=10000, help='intervals to save ckpt file')
-    parser.add_argument('--validate_interval', default=2000, help='intervals to save ckpt file')
+    parser.add_argument('--validate_interval', default=1000, help='intervals to save ckpt file')
     parser.add_argument('--show_info_interval', default=20, help='intervals to save ckpt file')
     args = parser.parse_args()
     return args
@@ -75,9 +76,12 @@ if __name__ == '__main__':
     # 3.2 get arcface loss
     logit = arcface_loss(embedding=net.outputs, labels=labels, w_init=w_init_method, out_num=args.num_output)
     # 3.3 define the cross entropy
-    inference_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=labels)
-    inference_loss_avg = tf.reduce_mean(inference_loss)
+    inference_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=labels))
+    # inference_loss_avg = tf.reduce_mean(inference_loss)
     # 3.4 define weight deacy losses
+    # for var in tf.trainable_variables():
+    #     print(var.name)
+    # print('##########'*30)
     wd_loss = 0
     for weights in tl.layers.get_variables_with_name('W_conv2d', True, True):
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
@@ -87,20 +91,20 @@ if __name__ == '__main__':
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
     for gamma in tl.layers.get_variables_with_name('gamma', True, True):
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(gamma)
-    for beta in tl.layers.get_variables_with_name('beta', True, True):
-        wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(beta)
+    # for beta in tl.layers.get_variables_with_name('beta', True, True):
+    #     wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(beta)
     for alphas in tl.layers.get_variables_with_name('alphas', True, True):
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(alphas)
-    for bias in tl.layers.get_variables_with_name('resnet_v1_50/E_DenseLayer/b', True, True):
-        wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(bias)
+    # for bias in tl.layers.get_variables_with_name('resnet_v1_50/E_DenseLayer/b', True, True):
+    #     wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(bias)
 
     # 3.5 total losses
-    total_loss = inference_loss_avg + wd_loss
+    total_loss = inference_loss + wd_loss
     # 3.6 define the learning rate schedule
     p = int(512.0/args.batch_size)
     lr_steps = [p*val for val in args.lr_steps]
     print(lr_steps)
-    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.001, 0.0001, 0.00005, 0.00001], name='lr_schedule')
+    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.00006, 0.00003, 0.00002, 0.000005], name='lr_schedule')
     # 3.7 define the optimize method
     opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=args.momentum)
     # 3.8 get train op
@@ -150,7 +154,7 @@ if __name__ == '__main__':
                 feed_dict.update(net.all_drop)
                 start = time.time()
                 _, total_loss_val, inference_loss_val, wd_loss_val, _, acc_val = \
-                    sess.run([train_op, total_loss, inference_loss_avg, wd_loss, inc_op, acc],
+                    sess.run([train_op, total_loss, inference_loss, wd_loss, inc_op, acc],
                               feed_dict=feed_dict,
                               options=config_pb2.RunOptions(report_tensor_allocations_upon_oom=True))
                 end = time.time()

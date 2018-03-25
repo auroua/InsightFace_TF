@@ -4,6 +4,7 @@ from tensorlayer.layers import Layer, list_remove_repeat
 
 
 D_TYPE = tf.float32
+TF_GRAPHKEYS_VARIABLES = tf.GraphKeys.GLOBAL_VARIABLES
 
 
 class ElementwiseLayer(Layer):
@@ -497,80 +498,72 @@ class DenseLayer(Layer):
             self.all_params.extend([W])
 
 
+def get_shape(input_tensor):
+    static_shape = input_tensor.get_shape().as_list()
+    dynamic_shape = tf.unstack(tf.shape(input_tensor))
+    final_shapes = [shapes[1] if shapes[0] is None else shapes[0] for shapes in zip(static_shape, dynamic_shape)]
+    return final_shapes
+
+
 ## Group Batch Normalization layer
 class GroupNormLayer(Layer):
-    """
-    The :class:`GroupNormLayer` class is a implementation of Group Normalization.
-
+    """The :class:`GroupNormLayer` class is a for instance normalization.
+       The implementation is based on paper [Group Normalization](https://arxiv.org/pdf/1803.08494.pdf)
     Parameters
-    ----------
+    -----------
     layer : a :class:`Layer` instance
         The `Layer` class feeding into this layer.
-    n_units : int
-        The number of units of the layer.
-    act : activation function
-        The function that is applied to the layer activations.
-    W_init : weights initializer
-        The initializer for initializing the weight matrix.
-    b_init : biases initializer or None
-        The initializer for initializing the bias vector. If None, skip biases.
-    W_init_args : dictionary
-        The arguments for the weights tf.get_variable.
-    b_init_args : dictionary
-        The arguments for the biases tf.get_variable.
+    act : activation function.
+    epsilon : float
+        A small float number.
+    scale_init : beta initializer
+        The initializer for initializing beta
+    offset_init : gamma initializer
+        The initializer for initializing gamma
+    G: the group number
     name : a string or None
         An optional name to attach to this layer.
-
-    Examples
-    --------
-
-
-    Notes
-    -----
-    If the input to this layer has more than two axes, it need to flatten the
-    input by using :class:`FlattenLayer` in this case.
     """
-
     def __init__(
             self,
             layer=None,
-            n_units=100,
             act=tf.identity,
-            W_init=tf.truncated_normal_initializer(stddev=0.1),
-            b_init=tf.constant_initializer(value=0.0),
-            W_init_args={},
-            b_init_args={},
-            name='dense_layer',
+            epsilon=1e-5,
+            scale_init=tf.constant_initializer(1.0),
+            offset_init=tf.constant_initializer(0.0),
+            G=32,
+            name='group_norm',
     ):
         Layer.__init__(self, name=name)
         self.inputs = layer.outputs
-        if self.inputs.get_shape().ndims != 2:
-            raise Exception("The input dimension must be rank 2, please reshape or flatten it")
-
-        n_in = int(self.inputs.get_shape()[-1])
-        self.n_units = n_units
-        print("  [TL] DenseLayer  %s: %d %s" % (self.name, self.n_units, act.__name__))
+        print("  [TL] GroupNormLayer %s: epsilon:%f act:%s" % (self.name, epsilon, act.__name__))
+        inputs_shape = get_shape(layer.outputs)
+        G = tf.minimum(G, inputs_shape[-1])
+        # [N, H, W, C] to [N, C, H, W]
+        temp_input = tf.transpose(self.inputs, [0, 3, 1, 2])
+        temp_input = tf.reshape(temp_input, [inputs_shape[0], G, inputs_shape[-1]//G, inputs_shape[1], inputs_shape[2]],
+                                name='group_reshape1')
         with tf.variable_scope(name) as vs:
-            with tf.device('/cpu:0'):
-                W = tf.get_variable(name='W', shape=(n_in, n_units), initializer=W_init, dtype=D_TYPE, **W_init_args)
-            if b_init is not None:
-                try:
-                    with tf.device('/cpu:0'):
-                        b = tf.get_variable(name='b', shape=(n_units), initializer=b_init, dtype=D_TYPE, **b_init_args)
-                except:  # If initializer is a constant, do not specify shape.
-                    with tf.device('/cpu:0'):
-                        b = tf.get_variable(name='b', initializer=b_init, dtype=D_TYPE, **b_init_args)
-                self.outputs = act(tf.matmul(self.inputs, W) + b)
-            else:
-                self.outputs = act(tf.matmul(self.inputs, W))
-
-        # Hint : list(), dict() is pass by value (shallow), without them, it is
-        # pass by reference.
+            mean, var = tf.nn.moments(temp_input, [2, 3, 4], keep_dims=True)
+            scale = tf.get_variable('scale', shape=[1, inputs_shape[-1], 1, 1], initializer=scale_init, dtype=D_TYPE)
+            offset = tf.get_variable('offset', shape=[1, inputs_shape[-1], 1, 1], initializer=offset_init, dtype=D_TYPE)
+            temp_input = (temp_input - mean) / tf.sqrt(var + epsilon)
+            temp_input = tf.reshape(temp_input, shape=[inputs_shape[0], inputs_shape[-1], inputs_shape[1], inputs_shape[2]],
+                                    name='group_reshape2')
+            self.outputs = scale * temp_input + offset
+            self.outputs = tf.transpose(self.outputs, [0, 2, 3, 1])
+            self.outputs = act(self.outputs)
+            variables = tf.get_collection(TF_GRAPHKEYS_VARIABLES, scope=vs.name)
         self.all_layers = list(layer.all_layers)
         self.all_params = list(layer.all_params)
         self.all_drop = dict(layer.all_drop)
         self.all_layers.extend([self.outputs])
-        if b_init is not None:
-            self.all_params.extend([W, b])
-        else:
-            self.all_params.extend([W])
+        self.all_params.extend(variables)
+
+
+if __name__ == '__main__':
+    import numpy as np
+    a = np.random.randn(5, 32, 32, 64)
+    b = tf.placeholder(dtype=tf.float32, name='placeholder_b', shape=(None, 32, 32, 64))
+    inputs_tl = tl.layers.InputLayer(b, name='inputs_layer')
+    gp = GroupNormLayer(layer=inputs_tl)
