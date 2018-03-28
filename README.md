@@ -34,6 +34,30 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 * If use multiple gpus, you should keep at least 16 images each gpu.
 * Try [Group Normalization](https://arxiv.org/pdf/1803.08494.pdf), you can use the code `L_Resnet_E_IR_GBN.py`
 
+
+#### Training models (Continual updates)
+
+##### model A
+| model name    | depth| normalization layer |batch size|
+| ----- |:-----:|:-----:|:-----:|
+| model A | 50 |group normalization|10|
+
+
+| dbname    | steps | accuracy |
+| ----- |:-----:|:-----:|
+| lfw | epoch 0 170.0k |0.9288|
+| cfp_ff | epoch 0 170.0k |0.914|
+| cfp_fp | epoch 0 170.0k |0.7219|
+| age_db30 | epoch 0 170.0k |0.722|
+
+![inference](./figures/inference_loss_170k.png)
+![wd](./figures/weight_deacy_loss_170k.png)
+![total](./figures/total_loss_170k.png)
+
+![lfw_acc](./figures/lfw_acc_170k.png)
+
+#####
+
 #### Requirements
 1. TensorFlow 1.4 1.6
 2. TensorLayer 1.7
