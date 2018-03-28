@@ -54,6 +54,7 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 ![wd](./figures/weight_deacy_loss_170k.png)
 ![total](./figures/total_loss_170k.png)
 
+##### lfw accuracy
 ![lfw_acc](./figures/lfw_acc_170k.png)
 
 #####
