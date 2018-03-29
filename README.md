@@ -40,18 +40,27 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 ##### model A
 | model name    | depth| normalization layer |batch size|
 | ----- |:-----:|:-----:|:-----:|
-| model A | 50 |group normalization|10|
+| model A | 50 |group normalization|16|
 
-
+###### 2017-03-28
 | dbname    | steps | accuracy |
 | ----- |:-----:|:-----:|
-| lfw | epoch 0 170.0k |0.9288|
-| cfp_ff | epoch 0 170.0k |0.914|
-| cfp_fp | epoch 0 170.0k |0.7219|
-| age_db30 | epoch 0 170.0k |0.722|
+| lfw | 170.0k |0.9288|
+| cfp_ff | 170.0k |0.914|
+| cfp_fp | 170.0k |0.7219|
+| age_db30 | 170.0k |0.722|
+
+
+###### 2017-03-29
+| dbname    | steps | accuracy |
+| ----- |:-----:|:-----:|
+| lfw | 250.0k |0.948|
+| cfp_ff | 250.0k |0.933|
+| cfp_fp | 250.0k |0.736|
+| age_db30 | 250.0k |0.7676|
 
 ![information](./figures/model_a_170k.png)
-
+![lfw_acc_250k](./figures/lfw_250k.png)
 
 #####
 
