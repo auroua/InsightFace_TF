@@ -59,10 +59,30 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 | cfp_fp | 250.0k |0.736|
 | age_db30 | 250.0k |0.7676|
 
-![information](./figures/model_a_170k.png)
-![lfw_acc_250k](./figures/lfw_250k.png)
+###### 2017-03-30
+| dbname    | steps | accuracy |
+| ----- |:-----:|:-----:|
+| lfw | 310.0k |0.961|
+| cfp_ff | 310.0k |0.956|
+| cfp_fp | 250.0k |0.7634|
+| age_db30 | 310.0k |0.811|
 
-#####
+![information](./figures/model_a_170k.png)
+![lfw_acc_310k](./figures/lfw_310k.png)
+
+##### model B
+| model name    | depth| normalization layer |batch size|
+| ----- |:-----:|:-----:|:-----:|
+| model B | 50 |batch normalization|10|
+
+###### 2017-03-30
+| dbname    | steps | accuracy |
+| ----- |:-----:|:-----:|
+| lfw | 30.0k |0.9585
+| cfp_ff | 30.0k |0.9547|
+| cfp_fp | 30.0k |0.7577|
+| age_db30 | 30.0k |0.8553|
+
 
 #### Requirements
 1. TensorFlow 1.4 1.6
