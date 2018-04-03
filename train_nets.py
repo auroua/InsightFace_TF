@@ -16,7 +16,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description='parameters to train net')
     parser.add_argument('--net_depth', default=50, help='resnet depth, default is 50')
     parser.add_argument('--epoch', default=100000, help='epoch to train the network')
-    parser.add_argument('--batch_size', default=10, help='batch size to train network')
+    parser.add_argument('--batch_size', default=16, help='batch size to train network')
     parser.add_argument('--lr_steps', default=[40000, 60000, 80000], help='learning rate to train network')
     parser.add_argument('--momentum', default=0.9, help='learning alg momentum')
     parser.add_argument('--weight_deacy', default=5e-3, help='learning alg momentum')
@@ -29,12 +29,13 @@ def get_parser():
                         help='path to the output of tfrecords file path')
     parser.add_argument('--summary_path', default='./output/summary', help='the summary file save path')
     parser.add_argument('--ckpt_path', default='./output/ckpt', help='the ckpt file save path')
+    parser.add_argument('--log_file_path', default='./output/logs', help='the ckpt file save path')
     parser.add_argument('--saver_maxkeep', default=100, help='tf.train.Saver max keep ckpt files')
-    parser.add_argument('--buffer_size', default=20000, help='tf dataset api buffer size')
+    parser.add_argument('--buffer_size', default=2000, help='tf dataset api buffer size')
     parser.add_argument('--log_device_mapping', default=False, help='show device placement log')
     parser.add_argument('--summary_interval', default=300, help='interval to save summary')
     parser.add_argument('--ckpt_interval', default=10000, help='intervals to save ckpt file')
-    parser.add_argument('--validate_interval', default=1000, help='intervals to save ckpt file')
+    parser.add_argument('--validate_interval', default=2000, help='intervals to save ckpt file')
     parser.add_argument('--show_info_interval', default=20, help='intervals to save ckpt file')
     args = parser.parse_args()
     return args
@@ -104,7 +105,7 @@ if __name__ == '__main__':
     p = int(512.0/args.batch_size)
     lr_steps = [p*val for val in args.lr_steps]
     print(lr_steps)
-    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.00005, 0.00001, 0.000005, 0.000001], name='lr_schedule')
+    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.0005, 0.0001, 0.00005, 0.00001], name='lr_schedule')
     # 3.7 define the optimize method
     opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=args.momentum)
     # 3.8 get train op
@@ -143,8 +144,13 @@ if __name__ == '__main__':
     # 3.13 init all variables
     sess.run(tf.global_variables_initializer())
 
+    if not os.path.exists(args.log_file_path):
+        os.makedirs(args.log_file_path)
+    log_file_path = args.log_file_path + '/train' + time.strftime('_%Y-%m-%d-%H-%M', time.localtime(time.time())) + '.log'
+    log_file = open(log_file_path, 'w')
     # 4 begin iteration
     count = 0
+    total_accuracy = {}
     for i in range(args.epoch):
         sess.run(iterator.initializer)
         while True:
@@ -186,11 +192,23 @@ if __name__ == '__main__':
                     results = ver_test(ver_list=ver_list, ver_name_list=ver_name_list, nbatch=count, sess=sess,
                              embedding_tensor=embedding_tensor, batch_size=args.batch_size, feed_dict=feed_dict_test,
                              input_placeholder=images)
-                    if max(results) > 0.99:
+                    total_accuracy[str(count)] = results[0]
+                    print('########'*30)
+                    print(list(total_accuracy.keys()))
+                    print(list(total_accuracy.values()))
+                    log_file.write('########'*30+'\n')
+                    log_file.write(list(total_accuracy.keys()) + '\n')
+                    log_file.write(list(total_accuracy.values()) + '\n')
+                    log_file.flush()
+                    if max(results) > 0.996:
                         print('best accuracy is %.5f' % max(results))
                         filename = 'InsightFace_iter_best_{:d}'.format(count) + '.ckpt'
                         filename = os.path.join(args.ckpt_path, filename)
                         saver.save(sess, filename)
+                        log_file.write('####Best Accuracy####')
+                        log_file.write(str(max(results))+'\n')
+                        log_file.write(filename+'\n')
             except tf.errors.OutOfRangeError:
                 print("End of epoch %d" % i)
                 break
+    log_file.close()
