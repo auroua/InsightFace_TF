@@ -42,7 +42,7 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 | ----- |:-----:|:-----:|:-----:|
 | model A | 50 |group normalization|16|
 
-###### 2017-03-28
+###### 2018-03-28
 | dbname    | steps | accuracy |
 | ----- |:-----:|:-----:|
 | lfw | 170.0k |0.9288|
@@ -50,32 +50,22 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 | cfp_fp | 170.0k |0.7219|
 | age_db30 | 170.0k |0.722|
 
-
-###### 2017-03-29
+###### 2018-04-04
 | dbname    | steps | accuracy |
 | ----- |:-----:|:-----:|
-| lfw | 250.0k |0.948|
-| cfp_ff | 250.0k |0.933|
-| cfp_fp | 250.0k |0.736|
-| age_db30 | 250.0k |0.7676|
+| lfw | 730.0k |0.9865|
+| cfp_ff | 730.0k |0.9831|
+| cfp_fp | 730.0k |0.8259|
+| age_db30 | 730.0k |0.8950|
 
-###### 2017-03-30
-| dbname    | steps | accuracy |
-| ----- |:-----:|:-----:|
-| lfw | 310.0k |0.961|
-| cfp_ff | 310.0k |0.956|
-| cfp_fp | 250.0k |0.7634|
-| age_db30 | 310.0k |0.811|
-
-![information](./figures/model_a_170k.png)
-![lfw_acc_310k](./figures/lfw_310k.png)
+![lfw_acc_310k](./figures/lfw_730k.png)
 
 ##### model B
 | model name    | depth| normalization layer |batch size|
 | ----- |:-----:|:-----:|:-----:|
 | model B | 50 |batch normalization|10|
 
-###### 2017-03-30
+###### 2018-03-30
 | dbname    | steps | accuracy |
 | ----- |:-----:|:-----:|
 | lfw | 30.0k |0.9585
@@ -83,6 +73,14 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 | cfp_fp | 30.0k |0.7577|
 | age_db30 | 30.0k |0.8553|
 
+
+###### 2018-04-04
+| dbname    | accuracy |
+| ----- |:-----:|
+| lfw |0.9912|
+| cfp_ff |0.9897|
+| cfp_fp |0.8539|
+| age_db30 |0.9400|
 
 #### Requirements
 1. TensorFlow 1.4 1.6
