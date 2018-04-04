@@ -197,8 +197,8 @@ if __name__ == '__main__':
                     print(list(total_accuracy.keys()))
                     print(list(total_accuracy.values()))
                     log_file.write('########'*30+'\n')
-                    log_file.write(list(total_accuracy.keys()) + '\n')
-                    log_file.write(list(total_accuracy.values()) + '\n')
+                    log_file.write(','.join(list(total_accuracy.keys())) + '\n')
+                    log_file.write(','.join([str(val) for val in list(total_accuracy.values())]) + '\n')
                     log_file.flush()
                     if max(results) > 0.996:
                         print('best accuracy is %.5f' % max(results))
