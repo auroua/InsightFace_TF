@@ -61,6 +61,12 @@ class BatchNormLayer(Layer):
 
     Batch normalization on fully-connected or convolutional maps.
 
+    ```
+        https://www.tensorflow.org/api_docs/python/tf/cond
+        If x < y, the tf.add operation will be executed and tf.square operation will not be executed.
+        Since z is needed for at least one branch of the cond, the tf.multiply operation is always executed, unconditionally.
+    ```
+
     Parameters
     -----------
     layer : a :class:`Layer` instance
@@ -84,6 +90,7 @@ class BatchNormLayer(Layer):
     ----------
     - `Source <https://github.com/ry/tensorflow-resnet/blob/master/resnet.py>`_
     - `stackoverflow <http://stackoverflow.com/questions/38312668/how-does-one-do-inference-with-batch-normalization-with-tensor-flow>`_
+
     """
 
     def __init__(
@@ -155,24 +162,11 @@ class BatchNormLayer(Layer):
             def mean_var_with_update():
                 with tf.control_dependencies([update_moving_mean, update_moving_variance]):
                     return tf.identity(mean), tf.identity(variance)
-
-            # if is_train:
-            #     mean, var = mean_var_with_update()
-            #     self.outputs = act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
-            # else:
-            #     self.outputs = act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
-
-            def train_outputs():
+            if trainable:
                 mean, var = mean_var_with_update()
-                return act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
-
-            def test_outputs():
-                return act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
-
-            self.outputs = tf.cond(trainable,
-                                   lambda: train_outputs(),
-                                   lambda: test_outputs())
-
+                self.outputs = act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
+            else:
+                self.outputs = act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
             variables = [beta, gamma, moving_mean, moving_variance]
         self.all_layers = list(layer.all_layers)
         self.all_params = list(layer.all_params)
@@ -294,8 +288,8 @@ def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, w_init=Non
         return output
 
 
-def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, scope=None):
-    with tf.variable_scope(scope):
+def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, reuse=False, scope=None):
+    with tf.variable_scope(scope, reuse=reuse):
         # inputs = tf.subtract(inputs, 127.5)
         # inputs = tf.multiply(inputs, 0.0078125)
         net_inputs = tl.layers.InputLayer(inputs, name='input_layer')
@@ -361,7 +355,7 @@ def resnetse_v1_block(scope, base_depth, num_units, stride, rate=1, unit_fn=None
   }] * (num_units - 1))
 
 
-def get_resnet(inputs, num_layers, type=None, w_init=None, trainable=None, sess=None):
+def get_resnet(inputs, num_layers, type=None, w_init=None, trainable=None, sess=None, reuse=False):
     if type == 'ir':
         unit_fn = bottleneck_IR
     elif type == 'se_ir':
@@ -397,6 +391,7 @@ def get_resnet(inputs, num_layers, type=None, w_init=None, trainable=None, sess=
                  blocks=blocks,
                  w_init=w_init,
                  trainable=trainable,
+                 reuse=reuse,
                  scope='resnet_v1_%d' % num_layers)
     return net
 

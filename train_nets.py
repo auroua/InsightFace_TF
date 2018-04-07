@@ -3,8 +3,8 @@ import tensorlayer as tl
 import argparse
 from data.mx2tfrecords import parse_function
 import os
-# from nets.L_Resnet_E_IR import get_resnet
-from nets.L_Resnet_E_IR_GBN import get_resnet
+from nets.L_Resnet_E_IR import get_resnet
+# from nets.L_Resnet_E_IR_GBN import get_resnet
 from losses.face_losses import arcface_loss
 from tensorflow.core.protobuf import config_pb2
 import time
@@ -31,7 +31,7 @@ def get_parser():
     parser.add_argument('--ckpt_path', default='./output/ckpt', help='the ckpt file save path')
     parser.add_argument('--log_file_path', default='./output/logs', help='the ckpt file save path')
     parser.add_argument('--saver_maxkeep', default=100, help='tf.train.Saver max keep ckpt files')
-    parser.add_argument('--buffer_size', default=2000, help='tf dataset api buffer size')
+    parser.add_argument('--buffer_size', default=10000, help='tf dataset api buffer size')
     parser.add_argument('--log_device_mapping', default=False, help='show device placement log')
     parser.add_argument('--summary_interval', default=300, help='interval to save summary')
     parser.add_argument('--ckpt_interval', default=10000, help='intervals to save ckpt file')
@@ -72,10 +72,14 @@ if __name__ == '__main__':
     # 3. define network, loss, optimize method, learning rate schedule, summary writer, saver
     # 3.1 inference phase
     w_init_method = tf.contrib.layers.xavier_initializer(uniform=False)
-    net = get_resnet(images, args.net_depth, type='ir', w_init=w_init_method, trainable=trainable)
-    embedding_tensor = net.outputs
+    net = get_resnet(images, args.net_depth, type='ir', w_init=w_init_method, trainable=True)
     # 3.2 get arcface loss
     logit = arcface_loss(embedding=net.outputs, labels=labels, w_init=w_init_method, out_num=args.num_output)
+    # test net  because of batch normal layer
+    tl.layers.set_name_reuse(True)
+    test_net = get_resnet(images, args.net_depth, type='ir', w_init=w_init_method, trainable=False, reuse=True)
+    embedding_tensor = test_net.outputs
+
     # 3.3 define the cross entropy
     inference_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=labels))
     # inference_loss_avg = tf.reduce_mean(inference_loss)
@@ -144,12 +148,15 @@ if __name__ == '__main__':
     # 3.13 init all variables
     sess.run(tf.global_variables_initializer())
 
+    restore_saver = tf.train.Saver()
+    restore_saver.restore(sess, '/home/aurora/workspaces2018/InsightFace_TF/output/ckpt/InsightFace_iter_best_1026000.ckpt')
+    # 4 begin iteration
     if not os.path.exists(args.log_file_path):
         os.makedirs(args.log_file_path)
     log_file_path = args.log_file_path + '/train' + time.strftime('_%Y-%m-%d-%H-%M', time.localtime(time.time())) + '.log'
     log_file = open(log_file_path, 'w')
     # 4 begin iteration
-    count = 0
+    count = 1026000
     total_accuracy = {}
     for i in range(args.epoch):
         sess.run(iterator.initializer)
@@ -192,23 +199,24 @@ if __name__ == '__main__':
                     results = ver_test(ver_list=ver_list, ver_name_list=ver_name_list, nbatch=count, sess=sess,
                              embedding_tensor=embedding_tensor, batch_size=args.batch_size, feed_dict=feed_dict_test,
                              input_placeholder=images)
+                    print('test accuracy is: ', str(results[0]))
                     total_accuracy[str(count)] = results[0]
-                    print('########'*30)
-                    print(list(total_accuracy.keys()))
-                    print(list(total_accuracy.values()))
-                    log_file.write('########'*30+'\n')
+                    log_file.write('########'*10+'\n')
                     log_file.write(','.join(list(total_accuracy.keys())) + '\n')
-                    log_file.write(','.join([str(val) for val in list(total_accuracy.values())]) + '\n')
+                    log_file.write(','.join([str(val) for val in list(total_accuracy.values())])+'\n')
                     log_file.flush()
                     if max(results) > 0.996:
                         print('best accuracy is %.5f' % max(results))
                         filename = 'InsightFace_iter_best_{:d}'.format(count) + '.ckpt'
                         filename = os.path.join(args.ckpt_path, filename)
                         saver.save(sess, filename)
-                        log_file.write('####Best Accuracy####')
+                        log_file.write('######Best Accuracy######'+'\n')
                         log_file.write(str(max(results))+'\n')
                         log_file.write(filename+'\n')
+
+                        log_file.flush()
             except tf.errors.OutOfRangeError:
                 print("End of epoch %d" % i)
                 break
     log_file.close()
+    log_file.write('\n')
