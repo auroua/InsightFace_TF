@@ -120,7 +120,7 @@ if __name__ == '__main__':
     # train_op = opt.minimize(total_loss, global_step=global_step)
     # 3.9 define the inference accuracy used during validate or test
     pred = tf.nn.softmax(logit)
-    acc = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(pred, axis=1), labels), dtype=tf.int64))
+    acc = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(pred, axis=1), labels), dtype=tf.float32))   # fix issues #10
     # 3.10 define sess
     config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=args.log_device_mapping)
     config.gpu_options.allow_growth = True

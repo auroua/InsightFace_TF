@@ -38,49 +38,32 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 #### Training models (Continual updates)
 
 ##### model A
-| model name    | depth| normalization layer |batch size|
-| ----- |:-----:|:-----:|:-----:|
-| model A | 50 |group normalization|16|
+| model name    | depth| normalization layer |batch size| total_steps | download |
+| ----- |:-----:|:-----:|:-----:|:-----:|:-----:|
+| model A | 50 |group normalization|16| 1060k |[model a](https://pan.baidu.com/s/1JuXvBq-9lymOrxzXhsmX4A)|
 
-###### 2018-03-28
-| dbname    | steps | accuracy |
-| ----- |:-----:|:-----:|
-| lfw | 170.0k |0.9288|
-| cfp_ff | 170.0k |0.914|
-| cfp_fp | 170.0k |0.7219|
-| age_db30 | 170.0k |0.722|
+###### accuracy
+| dbname | accuracy |
+| ----- |:-----:|
+| lfw |0.9897|
+| cfp_ff |0.9876|
+| cfp_fp |0.84357|
+| age_db30 |0.914|
 
-###### 2018-04-04
-| dbname    | steps | accuracy |
-| ----- |:-----:|:-----:|
-| lfw | 730.0k |0.9865|
-| cfp_ff | 730.0k |0.9831|
-| cfp_fp | 730.0k |0.8259|
-| age_db30 | 730.0k |0.8950|
-
-![lfw_acc_310k](./figures/lfw_730k.png)
 
 ##### model B
-| model name    | depth| normalization layer |batch size|
-| ----- |:-----:|:-----:|:-----:|
-| model B | 50 |batch normalization|10|
+| model name    | depth| normalization layer |batch size| total_steps| download |
+| ----- |:-----:|:-----:|:-----:|:-----:|:-----:|
+| model B | 50 |batch normalization|16| 1100k |[model_b](https://pan.baidu.com/s/1XU29pw9mGExxzVICZcJWdA) |
 
-###### 2018-03-30
-| dbname    | steps | accuracy |
-| ----- |:-----:|:-----:|
-| lfw | 30.0k |0.9585
-| cfp_ff | 30.0k |0.9547|
-| cfp_fp | 30.0k |0.7577|
-| age_db30 | 30.0k |0.8553|
-
-
-###### 2018-04-04
-| dbname    | accuracy |
+###### accuracy
+| dbname | accuracy |
 | ----- |:-----:|
-| lfw |0.9912|
-| cfp_ff |0.9897|
-| cfp_fp |0.8539|
-| age_db30 |0.9400|
+| lfw |0.9933|
+| cfp_ff |0.99357|
+| cfp_fp |0.8766|
+| age_db30 |0.9342|
+
 
 #### Requirements
 1. TensorFlow 1.4 1.6
