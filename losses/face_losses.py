@@ -79,6 +79,8 @@ def cosineface_losses(embedding, labels, out_num, w_init=None, s=30., m=0.4):
 
 def combine_loss_val(embedding, labels, w_init, out_num, margin_a, margin_m, margin_b, s):
     '''
+    This code is contributed by RogerLo. Thanks for you contribution.
+
     :param embedding: the input embedding vectors
     :param labels:  the input labels, the shape should be eg: (batch_size, 1)
     :param s: scalar value default is 64

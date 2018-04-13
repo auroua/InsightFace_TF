@@ -65,6 +65,7 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 | age_db30 |0.9342|
 
 
+
 #### Requirements
 1. TensorFlow 1.4 1.6
 2. TensorLayer 1.7
