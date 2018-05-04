@@ -38,9 +38,9 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 #### Training models (Continual updates)
 
 ##### model A
-| model name    | depth| normalization layer |batch size| total_steps | download |
-| ----- |:-----:|:-----:|:-----:|:-----:|:-----:|
-| model A | 50 |group normalization|16| 1060k |[model a](https://pan.baidu.com/s/1JuXvBq-9lymOrxzXhsmX4A)|
+| model name    | depth| normalization layer |batch size| total_steps | download | password |
+| ----- |:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
+| model A | 50 |group normalization|16| 1060k |[model a](https://pan.baidu.com/s/1qWrDCTFlQXlFcBR-dqR-6A)|2q72|
 
 ###### accuracy
 | dbname | accuracy |
@@ -52,9 +52,9 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 
 
 ##### model B
-| model name    | depth| normalization layer |batch size| total_steps| download |
-| ----- |:-----:|:-----:|:-----:|:-----:|:-----:|
-| model B | 50 |batch normalization|16| 1100k |[model_b](https://pan.baidu.com/s/1XU29pw9mGExxzVICZcJWdA) |
+| model name    | depth| normalization layer |batch size| total_steps| download | password |
+| ----- |:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
+| model B | 50 |batch normalization|16| 1100k |[model_b](https://pan.baidu.com/s/11KDqOkF4ThO7mnQQaNO9bA) |h6ai|
 
 ###### accuracy
 | dbname | accuracy |
