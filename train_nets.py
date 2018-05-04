@@ -19,9 +19,9 @@ def get_parser():
     parser.add_argument('--batch_size', default=16, help='batch size to train network')
     parser.add_argument('--lr_steps', default=[40000, 60000, 80000], help='learning rate to train network')
     parser.add_argument('--momentum', default=0.9, help='learning alg momentum')
-    parser.add_argument('--weight_deacy', default=5e-3, help='learning alg momentum')
+    parser.add_argument('--weight_deacy', default=5e-4, help='learning alg momentum')
     # parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff', 'cfp_fp', 'agedb_30'], help='evluation datasets')
-    parser.add_argument('--eval_datasets', default=['lfw'], help='evluation datasets')
+    parser.add_argument('--eval_datasets', default=['cfp_ff'], help='evluation datasets')
     parser.add_argument('--eval_db_path', default='./datasets/faces_ms1m_112x112', help='evluate datasets base path')
     parser.add_argument('--image_size', default=[112, 112], help='the image size')
     parser.add_argument('--num_output', default=85164, help='the image size')
@@ -49,7 +49,8 @@ if __name__ == '__main__':
     inc_op = tf.assign_add(global_step, 1, name='increment_global_step')
     images = tf.placeholder(name='img_inputs', shape=[None, *args.image_size, 3], dtype=tf.float32)
     labels = tf.placeholder(name='img_labels', shape=[None, ], dtype=tf.int64)
-    trainable = tf.placeholder(name='trainable_bn', dtype=tf.bool)
+    # trainable = tf.placeholder(name='trainable_bn', dtype=tf.bool)
+    dropout_rate = tf.placeholder(name='dropout_rate', dtype=tf.float32)
     # 2 prepare train datasets and test datasets by using tensorflow dataset api
     # 2.1 train datasets
     # the image is substracted 127.5 and multiplied 1/128.
@@ -72,14 +73,13 @@ if __name__ == '__main__':
     # 3. define network, loss, optimize method, learning rate schedule, summary writer, saver
     # 3.1 inference phase
     w_init_method = tf.contrib.layers.xavier_initializer(uniform=False)
-    net = get_resnet(images, args.net_depth, type='ir', w_init=w_init_method, trainable=True)
+    net = get_resnet(images, args.net_depth, type='ir', w_init=w_init_method, trainable=True, keep_rate=dropout_rate)
     # 3.2 get arcface loss
     logit = arcface_loss(embedding=net.outputs, labels=labels, w_init=w_init_method, out_num=args.num_output)
     # test net  because of batch normal layer
     tl.layers.set_name_reuse(True)
-    test_net = get_resnet(images, args.net_depth, type='ir', w_init=w_init_method, trainable=False, reuse=True)
+    test_net = get_resnet(images, args.net_depth, type='ir', w_init=w_init_method, trainable=False, reuse=True, keep_rate=dropout_rate)
     embedding_tensor = test_net.outputs
-
     # 3.3 define the cross entropy
     inference_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=labels))
     # inference_loss_avg = tf.reduce_mean(inference_loss)
@@ -96,8 +96,8 @@ if __name__ == '__main__':
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(weights)
     for gamma in tl.layers.get_variables_with_name('gamma', True, True):
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(gamma)
-    for beta in tl.layers.get_variables_with_name('beta', True, True):
-        wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(beta)
+    # for beta in tl.layers.get_variables_with_name('beta', True, True):
+    #     wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(beta)
     for alphas in tl.layers.get_variables_with_name('alphas', True, True):
         wd_loss += tf.contrib.layers.l2_regularizer(args.weight_deacy)(alphas)
     # for bias in tl.layers.get_variables_with_name('resnet_v1_50/E_DenseLayer/b', True, True):
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     p = int(512.0/args.batch_size)
     lr_steps = [p*val for val in args.lr_steps]
     print(lr_steps)
-    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.0005, 0.0001, 0.00005, 0.00001], name='lr_schedule')
+    lr = tf.train.piecewise_constant(global_step, boundaries=lr_steps, values=[0.001, 0.0005, 0.0003, 0.0001], name='lr_schedule')
     # 3.7 define the optimize method
     opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=args.momentum)
     # 3.8 get train op
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     # train_op = opt.minimize(total_loss, global_step=global_step)
     # 3.9 define the inference accuracy used during validate or test
     pred = tf.nn.softmax(logit)
-    acc = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(pred, axis=1), labels), dtype=tf.float32))   # fix issues #10
+    acc = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(pred, axis=1), labels), dtype=tf.float32))
     # 3.10 define sess
     config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=args.log_device_mapping)
     config.gpu_options.allow_growth = True
@@ -148,22 +148,23 @@ if __name__ == '__main__':
     # 3.13 init all variables
     sess.run(tf.global_variables_initializer())
 
-    restore_saver = tf.train.Saver()
-    restore_saver.restore(sess, '/home/aurora/workspaces2018/InsightFace_TF/output/ckpt/InsightFace_iter_best_1026000.ckpt')
+    # restore_saver = tf.train.Saver()
+    # restore_saver.restore(sess, '/home/aurora/workspaces2018/InsightFace_TF/output/ckpt/InsightFace_iter_1110000.ckpt')
     # 4 begin iteration
     if not os.path.exists(args.log_file_path):
         os.makedirs(args.log_file_path)
     log_file_path = args.log_file_path + '/train' + time.strftime('_%Y-%m-%d-%H-%M', time.localtime(time.time())) + '.log'
     log_file = open(log_file_path, 'w')
     # 4 begin iteration
-    count = 1026000
+    count = 0
     total_accuracy = {}
+
     for i in range(args.epoch):
         sess.run(iterator.initializer)
         while True:
             try:
                 images_train, labels_train = sess.run(next_element)
-                feed_dict = {images: images_train, labels: labels_train, trainable: True}
+                feed_dict = {images: images_train, labels: labels_train, dropout_rate: 0.4}
                 feed_dict.update(net.all_drop)
                 start = time.time()
                 _, total_loss_val, inference_loss_val, wd_loss_val, _, acc_val = \
@@ -181,7 +182,7 @@ if __name__ == '__main__':
 
                 # save summary
                 if count > 0 and count % args.summary_interval == 0:
-                    feed_dict = {images: images_train, labels: labels_train, trainable: True}
+                    feed_dict = {images: images_train, labels: labels_train, dropout_rate: 0.4}
                     feed_dict.update(net.all_drop)
                     summary_op_val = sess.run(summary_op, feed_dict=feed_dict)
                     summary.add_summary(summary_op_val, count)
@@ -194,7 +195,7 @@ if __name__ == '__main__':
 
                 # validate
                 if count > 0 and count % args.validate_interval == 0:
-                    feed_dict_test ={trainable: False}
+                    feed_dict_test ={dropout_rate: 1.0}
                     feed_dict_test.update(tl.utils.dict_to_one(net.all_drop))
                     results = ver_test(ver_list=ver_list, ver_name_list=ver_name_list, nbatch=count, sess=sess,
                              embedding_tensor=embedding_tensor, batch_size=args.batch_size, feed_dict=feed_dict_test,

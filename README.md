@@ -66,6 +66,20 @@ epoch 0, total_step 200, total loss is 95.20 , inference loss is 66.16, weight d
 
 
 
+##### model C
+| model name    | depth| normalization layer |batch size| total_steps| download | password |
+| ----- |:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
+| model C | 50 |batch normalization|16| 1950k |[model_c](https://pan.baidu.com/s/1ZlDcQPBh0znduSH6vQ_Q8Q) |8mdi|
+
+###### accuracy
+| dbname | accuracy |
+| ----- |:-----:|
+| lfw |0.9963|
+| cfp_ff |0.99586|
+| cfp_fp |0.9087|
+| age_db30 |0.96367|
+
+
 #### Requirements
 1. TensorFlow 1.4 1.6
 2. TensorLayer 1.7

@@ -164,6 +164,8 @@ class BatchNormLayer(Layer):
                     return tf.identity(mean), tf.identity(variance)
             if trainable:
                 mean, var = mean_var_with_update()
+                print(mean)
+                print(var)
                 self.outputs = act(tf.nn.batch_normalization(self.inputs, mean, var, beta, gamma, epsilon))
             else:
                 self.outputs = act(tf.nn.batch_normalization(self.inputs, moving_mean, moving_variance, beta, gamma, epsilon))
@@ -288,7 +290,7 @@ def bottleneck_IR_SE(inputs, depth, depth_bottleneck, stride, rate=1, w_init=Non
         return output
 
 
-def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, reuse=False, scope=None):
+def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, reuse=False, keep_rate=None, scope=None):
     with tf.variable_scope(scope, reuse=reuse):
         # inputs = tf.subtract(inputs, 127.5)
         # inputs = tf.multiply(inputs, 0.0078125)
@@ -309,6 +311,7 @@ def resnet(inputs, bottle_neck, blocks, w_init=None, trainable=None, reuse=False
                                             trainable=trainable)
         net = BatchNormLayer(net, act=tf.identity, is_train=True, name='E_BN1', trainable=trainable)
         # net = tl.layers.DropoutLayer(net, keep=0.4, name='E_Dropout')
+        net.outputs = tf.nn.dropout(net.outputs, keep_prob=keep_rate, name='E_Dropout')
         net_shape = net.outputs.get_shape()
         net = tl.layers.ReshapeLayer(net, shape=[-1, net_shape[1]*net_shape[2]*net_shape[3]], name='E_Reshapelayer')
         net = tl.layers.DenseLayer(net, n_units=512, W_init=w_init, name='E_DenseLayer')
@@ -355,7 +358,7 @@ def resnetse_v1_block(scope, base_depth, num_units, stride, rate=1, unit_fn=None
   }] * (num_units - 1))
 
 
-def get_resnet(inputs, num_layers, type=None, w_init=None, trainable=None, sess=None, reuse=False):
+def get_resnet(inputs, num_layers, type=None, w_init=None, trainable=None, sess=None, reuse=False, keep_rate=None):
     if type == 'ir':
         unit_fn = bottleneck_IR
     elif type == 'se_ir':
@@ -392,6 +395,7 @@ def get_resnet(inputs, num_layers, type=None, w_init=None, trainable=None, sess=
                  w_init=w_init,
                  trainable=trainable,
                  reuse=reuse,
+                 keep_rate = keep_rate,
                  scope='resnet_v1_%d' % num_layers)
     return net
 
