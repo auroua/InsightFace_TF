@@ -3,8 +3,9 @@ import tensorlayer as tl
 import argparse
 from data.mx2tfrecords import parse_function
 import os
-from nets.L_Resnet_E_IR import get_resnet
+# from nets.L_Resnet_E_IR import get_resnet
 # from nets.L_Resnet_E_IR_GBN import get_resnet
+from nets.L_Resnet_E_IR_fix_issue9 import get_resnet
 from losses.face_losses import arcface_loss
 from tensorflow.core.protobuf import config_pb2
 import time
@@ -14,14 +15,14 @@ from verification import ver_test
 
 def get_parser():
     parser = argparse.ArgumentParser(description='parameters to train net')
-    parser.add_argument('--net_depth', default=50, help='resnet depth, default is 50')
+    parser.add_argument('--net_depth', default=100, help='resnet depth, default is 50')
     parser.add_argument('--epoch', default=100000, help='epoch to train the network')
-    parser.add_argument('--batch_size', default=16, help='batch size to train network')
+    parser.add_argument('--batch_size', default=32, help='batch size to train network')
     parser.add_argument('--lr_steps', default=[40000, 60000, 80000], help='learning rate to train network')
     parser.add_argument('--momentum', default=0.9, help='learning alg momentum')
     parser.add_argument('--weight_deacy', default=5e-4, help='learning alg momentum')
     # parser.add_argument('--eval_datasets', default=['lfw', 'cfp_ff', 'cfp_fp', 'agedb_30'], help='evluation datasets')
-    parser.add_argument('--eval_datasets', default=['cfp_ff'], help='evluation datasets')
+    parser.add_argument('--eval_datasets', default=['lfw'], help='evluation datasets')
     parser.add_argument('--eval_db_path', default='./datasets/faces_ms1m_112x112', help='evluate datasets base path')
     parser.add_argument('--image_size', default=[112, 112], help='the image size')
     parser.add_argument('--num_output', default=85164, help='the image size')
