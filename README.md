@@ -71,7 +71,17 @@
 
 
 ##### model D
-Still training
+| model name    | depth| normalization layer |batch size| total_steps| model_size| download | password |
+| ----- |:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
+| model D | 50 |batch normalization|136| 710k | 348.9MB |[model_d](https://pan.baidu.com/s/1tQYMqfbG36wg1cXKHVoMVw) |amdt|
+
+###### accuracy
+| dbname | accuracy |
+| ----- |:-----:|
+| lfw |0.9968|
+| cfp_ff |0.9973|
+| cfp_fp |0.9271|
+| age_db30 |0.9725|
 
 
 
